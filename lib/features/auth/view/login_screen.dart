@@ -78,8 +78,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: AppSpacing.xl),
                   SocialButton.google(onPressed: loading ? null : () => context.read<AuthCubit>().signInWithGoogle()),
-                  const SizedBox(height: AppSpacing.md),
-                  SocialButton.apple(onPressed: loading ? null : () => context.read<AuthCubit>().signInWithGoogle()),
                   const SizedBox(height: AppSpacing.xl),
                   const AuthDivider(label: 'Or'),
                   const SizedBox(height: AppSpacing.lg),

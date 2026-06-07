@@ -86,8 +86,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   ),
                   const SizedBox(height: AppSpacing.xl),
                   SocialButton.google(onPressed: loading ? null : () => context.read<AuthCubit>().signInWithGoogle()),
-                  const SizedBox(height: AppSpacing.md),
-                  SocialButton.apple(onPressed: loading ? null : () => context.read<AuthCubit>().signInWithGoogle()),
                   const SizedBox(height: AppSpacing.xl),
                   const AuthDivider(label: 'Or sign up with email'),
                   const SizedBox(height: AppSpacing.lg),
