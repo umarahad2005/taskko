@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Taskko — Hi-Fi Prototype (Print)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&family=Fraunces:opsz,wght@9..144,500;9..144,700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #0F0F1A;
+    --ink-2: #2E2E3F;
+    --ink-3: #6B6B82;
+    --ink-4: #A8A8BC;
+    --line: #ECECF3;
+    --line-2: #DCDCE7;
+    --bg: #F2F7F4;
+    --surface: #FFFFFF;
+    --primary: #1FB6F0;
+    --primary-2: #5BCBF5;
+    --primary-soft: #DDF3FE;
+    --energy: #FF8A65;
+    --energy-soft: #FFE6DD;
+    --mint: #34D399;
+    --mint-soft: #D6F5E6;
+    --gold: #F5C544;
+    --gold-soft: #FFF1C9;
+    --rose: #F472B6;
+    --lav: #C7B8FF;
+  }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: #fff;
+    color: var(--ink);
+    font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .serif { font-family: 'Fraunces', serif; }
+  * { box-sizing: border-box; }
+  .phone-scroll::-webkit-scrollbar { width: 0; }
+  /* Disable all animations for print stability */
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  @page { size: A4 portrait; margin: 12mm 14mm; }
+
+  .page {
+    width: 100%;
+    page-break-after: always;
+    break-after: page;
+    padding: 0 0 14mm;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .page:last-child { page-break-after: auto; break-after: auto; }
+
+  .page-head {
+    width: 100%;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #ECECF3;
+    padding-bottom: 8px;
+  }
+  .page-eyebrow {
+    font-size: 10px; font-weight: 800; color: var(--primary);
+    letter-spacing: 0.6px; text-transform: uppercase;
+  }
+  .page-title {
+    font-family: 'Fraunces', serif; font-weight: 700;
+    font-size: 22px; letter-spacing: -0.4px; color: var(--ink);
+  }
+  .page-meta {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    color: var(--ink-3); font-weight: 600;
+  }
+  .page-content {
+    display: flex; gap: 22px; width: 100%; align-items: flex-start;
+  }
+  .phone-wrap {
+    flex-shrink: 0;
+    /* Scale phone to fit page */
+    transform: scale(0.62);
+    transform-origin: top left;
+    width: calc(402px * 0.62);
+    height: calc(874px * 0.62);
+  }
+  .phone-wrap > * {
+    transform-origin: top left;
+  }
+  .rationale {
+    flex: 1; padding-top: 4px;
+  }
+  .rationale h3 {
+    font-family: 'Fraunces', serif; font-weight: 700;
+    font-size: 16px; letter-spacing: -0.2px; margin: 0 0 6px;
+    color: var(--ink);
+  }
+  .rationale p.lede {
+    font-size: 12px; line-height: 1.55; color: var(--ink-2);
+    margin: 0 0 10px;
+  }
+  .rationale .princ {
+    background: #F7FBFD; border: 1px solid #DDF3FE; border-radius: 10px;
+    padding: 8px 10px; margin-bottom: 6px;
+  }
+  .rationale .princ-name {
+    font-size: 9px; font-weight: 800; color: var(--primary);
+    letter-spacing: 0.4px; text-transform: uppercase; margin-bottom: 2px;
+  }
+  .rationale .princ-body {
+    font-size: 11px; line-height: 1.45; color: var(--ink-2);
+  }
+  .cover-page {
+    page-break-after: always; break-after: page;
+    min-height: 80vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    padding: 40px 20px;
+  }
+  .cover-title {
+    font-family: 'Fraunces', serif; font-weight: 700;
+    font-size: 64px; letter-spacing: -2px; line-height: 1;
+    margin: 24px 0 12px;
+    background: linear-gradient(135deg, #1FB6F0 0%, #FF8A65 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .cover-sub {
+    font-size: 16px; color: var(--ink-3); max-width: 480px; line-height: 1.55;
+  }
+  .cover-meta {
+    margin-top: 32px; padding: 16px 22px;
+    background: #F7FBFD; border: 1px solid #DDF3FE; border-radius: 14px;
+    font-size: 12px; line-height: 1.7; color: var(--ink-2);
+    max-width: 460px;
+  }
+  .cover-meta b { color: var(--ink); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="components.jsx"></script>
+<script type="text/babel" src="auth.jsx"></script>
+<script type="text/babel" src="screens.jsx"></script>
+
+<script type="text/babel">
+// =====================================================
+// PRINT-ONLY APP
+// =====================================================
+
+const INITIAL_TASKS_PRINT = [
+  { id:'t1', title:'Read CS-201 lecture 7 notes', minutes:30, points:40, goal:'CS-201 midterm', done:true },
+  { id:'t2', title:'Practice 5 BST problems',     minutes:45, points:60, goal:'CS-201 midterm', done:true },
+  { id:'t3', title:'Draft sociology essay intro', minutes:25, points:30, goal:'Essay due Friday', done:false },
+  { id:'t4', title:'Review flashcards: Stats',    minutes:20, points:25, goal:'Stats quiz Mon',  done:false },
+  { id:'t5', title:'Email TA about extension',    minutes: 5, points:10, goal:'Admin',           done:false },
+];
+
+const PLAN_REVIEW_TASKS = [
+  { id:'p1', title:'Re-read chapters 5 & 6',          minutes:45, points:60 },
+  { id:'p2', title:'Solve 10 graph traversal problems',minutes:60, points:80 },
+  { id:'p3', title:'Watch recitation recordings',     minutes:40, points:45 },
+  { id:'p4', title:'Build dynamic programming cheat sheet', minutes:35, points:50 },
+  { id:'p5', title:'Take a timed mock exam',          minutes:90, points:120 },
+  { id:'p6', title:'Review missed mock questions',    minutes:30, points:40 },
+];
+
+const CHAT_MSGS_PRINT = [
+  { from:'tako', text:"Hey! I noticed your CS reading is overdue by a day. No drama — want me to slot it into tonight, or push it to tomorrow?" },
+  { from:'tako', kind:'nudge', text:"Your 5-day streak is alive 🔥 One 25-minute task tonight keeps it going.", actions:['Start a session','Remind me in 1h'] },
+  { from:'me', text:"I'm stuck on the practice problems, can't focus" },
+  { from:'tako', text:"Totally fair. Let's shrink the next task — pick the smallest piece you can finish in 10 minutes and I'll start a focus timer. Often momentum > motivation." },
+  { from:'me', text:"Can you motivate me?" },
+  { from:'tako', text:"You're 320 points from Elite and on a 5-day streak. The version of you that finishes today's CS reading is one step closer to that rank. One task at a time. 🚀" },
+];
+
+function makeState(overrides = {}) {
+  return {
+    user: { name: 'Sara', initials: 'S' },
+    streak: { days: 5, shields: 2 },
+    points: 1240,
+    rank: 'Pro',
+    mood: 'focused',
+    todayTasks: INITIAL_TASKS_PRINT,
+    nextTask: { title:'Draft sociology essay intro', minutes:25, points:30, goal:'Essay due Friday' },
+    goalDraft: '',
+    planStep: 'input',
+    planTasks: [],
+    chatMessages: CHAT_MSGS_PRINT,
+    ...overrides,
+  };
+}
+
+const noop = () => {};
+const noopDispatch = () => {};
+
+// A phone frame wrapper that contains a screen at full 402x874 size
+function PrintPhone({ children }) {
+  return (
+    <div className="phone-wrap">
+      <IOSDevice width={402} height={874}>
+        <div style={{position:'relative', height:'100%', background:'transparent'}}>
+          {children}
+        </div>
+      </IOSDevice>
+    </div>
+  );
+}
+
+function AppPhone({ tab, state }) {
+  const dispatch = noopDispatch;
+  const annotate = false;
+  return (
+    <PrintPhone>
+      {tab === 'home' && <HomeScreen state={state} dispatch={dispatch} annotate={annotate} goTo={noop}/>}
+      {tab === 'plan' && <PlanScreen state={state} dispatch={dispatch} annotate={annotate} goTo={noop}/>}
+      {tab === 'hub'  && <HubScreen  state={state} dispatch={dispatch} annotate={annotate}/>}
+      {tab === 'chat' && <ChatScreen state={state} dispatch={dispatch} annotate={annotate}/>}
+      <TabBar tab={tab} setTab={noop}/>
+    </PrintPhone>
+  );
+}
+
+const SCREENS = [
+  {
+    eyebrow: '01 · First launch',
+    title: 'Splash',
+    meta: 'Cold boot · brand recognition',
+    lede: 'Cold-start screen. Builds brand recall while assets/auth state load. Holds the user 2–3s so the brand registers before any UI work begins.',
+    principles: [
+      ['Recognition over recall', 'The mark is a checkmark in a squircle + a peach spark — the verb (mark done) and the energy/streak motif are encoded in the brand itself, so the logo doubles as a usage hint.'],
+      ['Color & emotion', 'Cool indigo→sky-blue gradient communicates calm focus; warm peach spark balances it with energy. The two product pillars in a single sigil.'],
+      ['Feedback (Nielsen #1)', 'Shimmer bar + "loading…" label tell the user the system is alive — no silent waits.'],
+      ['Constraints', 'No tappable controls: prevents action before the app is ready. Auto-advances on a clock the user cannot misread.'],
+    ],
+    render: () => <PrintPhone><SplashScreen onDone={noop} autoAdvance={false}/></PrintPhone>,
+  },
+  {
+    eyebrow: '02 · Onboarding (1 / 3)',
+    title: 'Plan with AI',
+    meta: 'Skippable · 3 slides',
+    lede: 'First of three value-prop slides. Introduces AI breakdown — the most differentiating feature — first.',
+    principles: [
+      ['Affordance', 'Bottom "Next" CTA is the brightest element. "Skip" is muted in the corner — both visible, hierarchy clear.'],
+      ['Escape hatch (Nielsen #3)', 'Skip is on every slide. Users are never trapped. Always exits cleanly to Sign-up.'],
+      ['Chunking (Miller\'s law)', 'One idea per slide + one vignette illustration. Reduces cognitive load.'],
+      ['Recognition', 'Slides preview real UI fragments (task cards, badge, leaderboard) so they\'re familiar when users meet them later.'],
+    ],
+    render: () => <PrintPhone><OnboardingScreen onFinish={noop} onSkip={noop} initialSlide={0}/></PrintPhone>,
+  },
+  {
+    eyebrow: '03 · Onboarding (2 / 3)',
+    title: 'Streaks & rewards',
+    meta: 'Gamification preview',
+    lede: 'Reward layer preview. Sets expectation: consistency is rewarded; the streak is the heartbeat of the app.',
+    principles: [
+      ['Variable reward priming', 'Big flame + 5-day bar trains the user on what they\'ll see daily on the dashboard — same widget, recognised immediately later.'],
+      ['Mapping', 'Slide accent (peach) matches the streak/energy color used in the dashboard\'s streak card — colour is consistent meaning.'],
+      ['Feedback', 'Active page-indicator dot animates into a pill — progress is visible without numbers.'],
+    ],
+    render: () => <PrintPhone><OnboardingScreen onFinish={noop} onSkip={noop} initialSlide={1}/></PrintPhone>,
+  },
+  {
+    eyebrow: '04 · Onboarding (3 / 3)',
+    title: 'Squad & sharing',
+    meta: 'Social proof',
+    lede: 'Last slide previews the social layer (leaderboard + share). Ends on "Get started" — the CTA changes label on the final slide to signal completion.',
+    principles: [
+      ['Closure (Gestalt)', 'Final CTA label changes from "Next" to "Get started" — visual + verbal close on the onboarding arc.'],
+      ['Visibility', 'Mini-leaderboard preview shows "You" already highlighted — primes the user to look for themselves in the real leaderboard.'],
+      ['Trust', 'Sample badge + report-card preview makes the value proposition concrete, not abstract.'],
+    ],
+    render: () => <PrintPhone><OnboardingScreen onFinish={noop} onSkip={noop} initialSlide={2}/></PrintPhone>,
+  },
+  {
+    eyebrow: '05 · Auth',
+    title: 'Sign up',
+    meta: 'Account creation',
+    lede: 'Minimum-viable form: 3 fields + agree. Friendly real-time validation. Social options up top to short-circuit form entry.',
+    principles: [
+      ['Constraints', 'Real-time validation catches malformed emails, short passwords, missing terms — errors prevented, not punished after submit (Norman).'],
+      ['Feedback', 'Password strength bar fills as user types. Per-field error messages are specific, not generic "invalid".'],
+      ['Visibility', 'Show/Hide toggle lets users verify their password — anti-frustration pattern.'],
+      ['Affordance', 'Primary CTA is greyed and disabled until form is valid — looks unclickable because it IS unclickable.'],
+      ['Gulf of Execution', 'One clear forward path. No optional fields to dither over.'],
+    ],
+    render: () => <PrintPhone><SignUpScreen onSignUp={noop} onGoLogin={noop}/></PrintPhone>,
+  },
+  {
+    eyebrow: '06 · Auth',
+    title: 'Log in',
+    meta: 'Returning user · faster',
+    lede: 'Returning-user path. Bigger logo for instant recognition; pre-filled fields for demo. Re-engagement copy primes the variable reward.',
+    principles: [
+      ['Recognition over recall', 'Large logo at top: returning users see brand instantly — they\'re in the right place.'],
+      ['Proximity (Gestalt)', '"Forgot?" sits inline with the password field it relates to, not in a hidden menu.'],
+      ['Emotion / Hook model', '"Your streak\'s waiting" copy is a variable-reward cue — re-engagement nudge built into the gate.'],
+      ['Constraints', 'CTA disabled until both fields look valid. No submit-and-shame loop.'],
+    ],
+    render: () => <PrintPhone><LoginScreen onLogin={noop} onGoSignup={noop}/></PrintPhone>,
+  },
+  {
+    eyebrow: '07 · Core',
+    title: 'Home / Dashboard',
+    meta: 'Streak · Rank · Mood · Next action',
+    lede: 'Pull-of-the-day surface. Reduces cognitive load by surfacing exactly one obvious next action. Stats above the fold answer "how am I doing?" in <1 second.',
+    principles: [
+      ['Visibility', 'Streak, rank, mood, next task all visible without scroll — no menus.'],
+      ['Mapping', 'Mood emoji directly drives session length/break ratio. Input maps to output.'],
+      ['Feedback', 'Tapping a task animates check + updates points instantly.'],
+      ['Gulf of Execution', 'Hero "Next up" card states verb + concrete task — students never wonder what to start.'],
+      ['Gulf of Evaluation', 'Progress bars on streak (5/5) + rank (68% to Elite) make state instantly readable.'],
+      ['Visual hierarchy', 'CTA uses the most saturated colour. Stats use medium contrast. Tasks neutral.'],
+      ['Color & burnout', 'Warm peach = energy/streak. Cool sky-blue = calm focus. Low-saturation mint background reduces eye fatigue.'],
+    ],
+    render: () => <AppPhone tab="home" state={makeState()}/>,
+  },
+  {
+    eyebrow: '08 · Core',
+    title: 'AI Task Breakdown',
+    meta: 'Goal → checklist',
+    lede: 'Bridges the hardest student problem: "where do I even start?" Takes a big, vague goal and produces a reviewable, editable plan.',
+    principles: [
+      ['Affordance', 'Textbox looks like a textbox. "Break it down" button has gradient + lift shadow — pressable.'],
+      ['Constraints', 'Sample-goal chips bound the AI input space without restricting freedom. Prevents junk prompts upstream.'],
+      ['Feedback', '4-step parsing indicator during generation. Each step lights up as it completes.'],
+      ['Mapping', 'Top progress indicator matches actual flow position (Goal → Break down → Customize).'],
+      ['Closure (Gestalt)', 'Numbered, identically-shaped cards form a clear list gestalt. Total time/points footer closes the loop.'],
+      ['User control', 'AI suggests; user decides — every task is editable, deletable, regenerable.'],
+    ],
+    render: () => <AppPhone tab="plan" state={makeState({ planStep:'review', goalDraft:'Prep for CS-201 midterm by Friday', planTasks: PLAN_REVIEW_TASKS })}/>,
+  },
+  {
+    eyebrow: '09 · Core',
+    title: 'Gamification & Social Hub',
+    meta: 'Badges · Leaderboard · Report card',
+    lede: 'Balances dopamine (badges, leaderboard) with reflection (report card). One-tap sharing turns wins into accountability + organic growth.',
+    principles: [
+      ['Visibility', 'Newly unlocked badge surfaces at top with an immediate Share affordance. Celebration is instant.'],
+      ['Similarity (Gestalt)', 'All badges share an octagonal medal shape; only saturation/colour differentiate earned vs locked.'],
+      ['Hierarchy (leaderboard)', '"You" row uses primary accent + bolder weight — findable in ≤1 second.'],
+      ['Closure', 'Weekly report card summarises a full week into 4 stats + a sparkline — a complete, shareable unit.'],
+      ['Mapping', 'Share button produces an actual preview of what will post — WYSIWYG.'],
+      ['Avoiding overwhelm', 'Gamification is scoped to its own tab; never leaks into productivity surfaces.'],
+    ],
+    render: () => <AppPhone tab="hub" state={makeState()}/>,
+  },
+  {
+    eyebrow: '10 · Core',
+    title: 'AI Chatbot — Tako',
+    meta: 'Conversational support · nudges',
+    lede: 'Conversational interface for emotional support + re-planning. Designed to feel like a friend, not a tool. Mood-aware avatar matches user state.',
+    principles: [
+      ['Proximity (Gestalt)', 'Same-speaker messages are spatially grouped. Avatar appears once per block, not per message.'],
+      ['Continuity', 'Bubbles flow top-down in time order. New messages animate in, anchoring the eye.'],
+      ['Color coding', 'User = primary blue. Tako = white with subtle border. Dialogue readable at a glance.'],
+      ['Affordance', 'Quick-prompt chips above the input remove the cold-start problem.'],
+      ['Feedback', 'Typing indicator with bouncing dots — no silent waits.'],
+      ['Nudge separation', 'High-priority nudge cards render with distinct gradient + action buttons — separates info from action.'],
+      ['Constraints', 'Mic + text only. No attachment/format menu. Single-purpose interface.'],
+    ],
+    render: () => <AppPhone tab="chat" state={makeState()}/>,
+  },
+];
+
+function PrintApp() {
+  return (
+    <>
+      <div className="cover-page">
+        <TaskkoAppLogo size={140} animate={false}/>
+        <div className="cover-title">taskko</div>
+        <div className="cover-sub">
+          Your AI productivity companion for students. High-fidelity prototype documentation — 10 screens with HCI rationale.
+        </div>
+        <div className="cover-meta">
+          <b>HCI Project · MAD Course</b><br/>
+          High-fidelity UI prototype demonstrating Norman's principles, Gestalt grouping, Visual hierarchy &amp; bridging the Gulfs of Execution &amp; Evaluation.<br/><br/>
+          <b>Stack:</b> Flutter (target) · Gemini AI · MongoDB · Firebase<br/>
+          <b>Universe:</b> Splash → Onboarding (3) → Sign up / Log in → 4 core app surfaces
+        </div>
+      </div>
+
+      {SCREENS.map((s, i) => (
+        <div key={i} className="page">
+          <div className="page-head">
+            <div>
+              <div className="page-eyebrow">{s.eyebrow}</div>
+              <div className="page-title">{s.title}</div>
+            </div>
+            <div className="page-meta">{s.meta}</div>
+          </div>
+          <div className="page-content">
+            {s.render()}
+            <div className="rationale">
+              <h3>HCI Rationale</h3>
+              <p className="lede">{s.lede}</p>
+              {s.principles.map(([n, b], j) => (
+                <div className="princ" key={j}>
+                  <div className="princ-name">{n}</div>
+                  <div className="princ-body">{b}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+// Wait for fonts + render, then trigger print
+async function start() {
+  ReactDOM.createRoot(document.getElementById('root')).render(<PrintApp/>);
+  try { await document.fonts.ready; } catch (e) {}
+  // Wait an extra beat for React + babel to settle
+  await new Promise(r => setTimeout(r, 700));
+  if (!window.__noAutoPrint) window.print();
+}
+start();
+</script>
+</body>
+</html>

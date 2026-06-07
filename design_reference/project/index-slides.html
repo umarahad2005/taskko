@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Taskko — Deck</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&family=Fraunces:opsz,wght@9..144,500;9..144,700&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; padding: 0; background: #0F0F1A; font-family: 'Manrope', system-ui, sans-serif; color: #0F0F1A; }
+  * { box-sizing: border-box; }
+  :root {
+    --ink: #0F0F1A;
+    --ink-2: #2E2E3F;
+    --ink-3: #6B6B82;
+    --primary: #1FB6F0;
+    --primary-deep: #0E8FC4;
+    --primary-soft: #DDF3FE;
+    --energy: #FF8A65;
+  }
+
+  .slide-page {
+    background:
+      radial-gradient(1400px 800px at 10% -10%, #DDF3FE 0%, transparent 55%),
+      radial-gradient(1100px 700px at 100% 110%, #FFE9DE 0%, transparent 55%),
+      #F2F7F4;
+    padding: 70px 80px;
+    position: relative;
+    overflow: hidden;
+    width: 1920px;
+    height: 1080px;
+    display: block;
+    margin: 0 auto;
+    box-shadow: 0 30px 60px -20px rgba(0,0,0,0.15);
+  }
+  body { background: #1F2230 !important; padding: 30px 0; }
+
+  /* COVER */
+  .cover {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background:
+      radial-gradient(900px 600px at 50% 30%, rgba(91,203,245,0.5) 0%, transparent 60%),
+      linear-gradient(180deg, #DDF3FE 0%, #F2F7F4 60%, #FFE6DD 100%) !important;
+    text-align: center;
+  }
+  .cover-logo {
+    width: 220px; height: 220px; border-radius: 60px;
+    background: linear-gradient(135deg, #5BCBF5 0%, #1FB6F0 55%, #0E8FC4 100%);
+    box-shadow: 0 40px 80px -30px rgba(31,182,240,0.6), inset 0 2px 0 rgba(255,255,255,0.3);
+    display: grid; place-items: center; position: relative;
+    margin-bottom: 32px;
+  }
+  .cover-logo::after {
+    content: ""; position: absolute; top: 40px; right: 28px;
+    width: 38px; height: 38px;
+    background: linear-gradient(180deg, #FFD7BC, #FF8A65);
+    clip-path: polygon(50% 0%, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0% 50%, 40% 40%);
+  }
+  .cover-logo svg { width: 110px; height: 110px; }
+  .cover-tag {
+    font-size: 14px; font-weight: 800; color: var(--primary-deep);
+    letter-spacing: 2px; text-transform: uppercase;
+    background: rgba(31,182,240,0.12); padding: 8px 18px; border-radius: 99px;
+    border: 1px solid rgba(31,182,240,0.3);
+  }
+  .cover-title {
+    font-family: 'Fraunces', serif; font-weight: 700;
+    font-size: 168px; letter-spacing: -6px; line-height: 1;
+    margin: 28px 0 14px;
+    background: linear-gradient(135deg, #1FB6F0 0%, #FF8A65 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .cover-sub {
+    font-size: 30px; color: var(--ink-2); max-width: 900px; line-height: 1.4; font-weight: 500;
+  }
+  .cover-meta { margin-top: 40px; display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+  .cover-meta span {
+    background: rgba(255,255,255,0.7); border: 1px solid rgba(15,15,26,0.06);
+    padding: 12px 18px; border-radius: 14px; font-size: 16px; font-weight: 600; color: var(--ink-2);
+  }
+  .cover-meta b { color: var(--ink); }
+
+  /* TWO COL */
+  .slide-two-col {
+    display: grid; grid-template-columns: 720px 1fr;
+    gap: 70px; align-items: center; height: 100%;
+  }
+  .slide-eyebrow {
+    font-size: 18px; font-weight: 800; color: var(--primary-deep);
+    letter-spacing: 2px; text-transform: uppercase;
+    display: inline-flex; align-items: center; gap: 12px;
+  }
+  .slide-eyebrow::before {
+    content: ""; width: 36px; height: 3px; border-radius: 99px;
+    background: linear-gradient(90deg, #1FB6F0, #FF8A65);
+  }
+  .slide-title {
+    font-family: 'Fraunces', serif; font-weight: 700;
+    font-size: 76px; letter-spacing: -2px; line-height: 1.05;
+    margin: 16px 0 14px;
+    color: var(--ink);
+  }
+  .slide-lede {
+    font-size: 22px; line-height: 1.5; color: var(--ink-2); margin: 0 0 22px;
+    font-weight: 500;
+  }
+  .princ-list { display: flex; flex-direction: column; gap: 12px; }
+  .princ {
+    background: rgba(255,255,255,0.7); border: 1px solid rgba(31,182,240,0.18);
+    border-radius: 18px; padding: 14px 18px;
+  }
+  .princ-name {
+    font-size: 13px; font-weight: 800; color: var(--primary-deep);
+    letter-spacing: 1.4px; text-transform: uppercase; margin-bottom: 3px;
+  }
+  .princ-body { font-size: 16.5px; line-height: 1.45; color: var(--ink-2); font-weight: 500; }
+
+  /* PHONE IMAGE STAGE */
+  .phone-stage {
+    display: flex; align-items: center; justify-content: center;
+    position: relative; height: 100%;
+  }
+  .phone-stage::before {
+    content: ""; position: absolute; inset: 30px;
+    background:
+      radial-gradient(60% 50% at 50% 50%, rgba(31,182,240,0.18) 0%, transparent 70%);
+    border-radius: 50%;
+    z-index: 0;
+  }
+  .phone-img {
+    position: relative; z-index: 1;
+    max-width: 100%; max-height: 880px;
+    width: auto; height: auto;
+    filter: drop-shadow(0 30px 60px rgba(60,80,160,0.25));
+  }
+
+  /* FOOTER */
+  .slide-footer {
+    position: absolute; bottom: 36px; left: 80px; right: 80px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 14px; font-weight: 700; color: var(--ink-3);
+    letter-spacing: 1px; text-transform: uppercase;
+  }
+  .slide-footer .brand {
+    display: inline-flex; align-items: center; gap: 10px; color: var(--ink-2);
+  }
+  .slide-footer .brand-dot {
+    width: 24px; height: 24px; border-radius: 8px;
+    background: linear-gradient(135deg,#5BCBF5,#1FB6F0,#0A6FA8);
+    display: inline-grid; place-items: center; color: #fff; font-weight: 800; font-size: 14px;
+    font-family: 'Fraunces', serif;
+  }
+
+  /* CLOSER */
+  .closer {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background:
+      radial-gradient(1100px 800px at 50% 50%, rgba(91,203,245,0.7) 0%, transparent 60%),
+      linear-gradient(135deg,#5BCBF5 0%, #1FB6F0 55%, #0E8FC4 100%) !important;
+    color: #fff !important;
+    text-align: center;
+  }
+  .closer-logo {
+    width: 180px; height: 180px; border-radius: 50px;
+    background: rgba(255,255,255,0.18);
+    box-shadow: 0 30px 70px -20px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.3);
+    display: grid; place-items: center; backdrop-filter: blur(8px);
+  }
+  .closer-check {
+    width: 90px; height: 60px; border-bottom: 14px solid #fff; border-right: 14px solid #fff;
+    transform: rotate(45deg) translate(-8px, -8px);
+  }
+  .closer-title {
+    font-family: 'Fraunces', serif; font-weight: 700;
+    font-size: 144px; letter-spacing: -4px; line-height: 1;
+    margin: 28px 0 18px;
+    color: #fff;
+  }
+  .closer-sub { font-size: 28px; opacity: 0.92; font-weight: 500; max-width: 800px; line-height: 1.4; color: #fff; }
+
+  /* PROCESS / SUMMARY SLIDE */
+  .system-grid {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 30px; margin-top: 40px;
+  }
+  .system-card {
+    background: rgba(255,255,255,0.75); border: 1px solid rgba(31,182,240,0.2);
+    border-radius: 22px; padding: 28px 30px;
+  }
+  .system-card-eyebrow {
+    font-size: 13px; font-weight: 800; color: var(--primary-deep);
+    letter-spacing: 1.4px; text-transform: uppercase; margin-bottom: 10px;
+  }
+  .system-card-title {
+    font-family: 'Fraunces', serif; font-weight: 700; font-size: 30px;
+    color: var(--ink); margin: 0 0 8px; letter-spacing: -0.5px;
+  }
+  .system-card-body { font-size: 18px; line-height: 1.5; color: var(--ink-2); font-weight: 500; }
+</style>
+</head>
+<body>
+
+<div class="deck">
+  <!-- 1. Cover -->
+  <section class="slide-page cover">
+    <div class="cover-logo">
+      <svg viewBox="0 0 100 100"><path d="M28 50 L44 66 L74 30" fill="none" stroke="#fff" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div class="cover-tag">HCI Project · MAD Course</div>
+    <div class="cover-title">taskko</div>
+    <div class="cover-sub">Your AI productivity companion for students.<br/>High-fidelity prototype &amp; HCI rationale.</div>
+    <div class="cover-meta">
+      <span><b>10 screens</b> · Splash → Onboarding → Auth → 4 Core surfaces</span>
+      <span><b>Norman</b> · Gestalt · Visual Hierarchy · Bridging the Gulfs</span>
+    </div>
+  </section>
+
+  <!-- 2. System overview -->
+  <section class="slide-page" >
+    <div class="slide-eyebrow">The design system</div>
+    <div class="slide-title">Motivating, but never overwhelming.</div>
+    <div class="slide-lede" style="max-width:1100px;">
+      Taskko's design system balances reward-loop energy with focus-friendly calm. Every choice (colour, type, motion) is grounded in an HCI rationale aimed at the student burnout problem.
+    </div>
+    <div class="system-grid">
+      <div class="system-card">
+        <div class="system-card-eyebrow">Colour palette</div>
+        <div class="system-card-title">Sky blue + warm peach</div>
+        <div class="system-card-body">Cool sky blue (#1FB6F0) for focus surfaces; warm peach (#FF8A65) reserved for streaks/energy. Low-saturation mint background reduces visual fatigue during long sessions.</div>
+      </div>
+      <div class="system-card">
+        <div class="system-card-eyebrow">Typography</div>
+        <div class="system-card-title">Fraunces + Manrope + Mono</div>
+        <div class="system-card-body">A warm display serif (Fraunces) for emotional headlines, a clean humanist sans (Manrope) for UI legibility, JetBrains Mono for numeric stats (streaks, points, timers).</div>
+      </div>
+      <div class="system-card">
+        <div class="system-card-eyebrow">Gamification</div>
+        <div class="system-card-title">Rewards, sandboxed</div>
+        <div class="system-card-body">Points, ranks, badges and squads live in the Hub tab. They surface as celebration moments on the dashboard but never crowd out the next-task action.</div>
+      </div>
+      <div class="system-card">
+        <div class="system-card-eyebrow">Motion &amp; feedback</div>
+        <div class="system-card-title">Confirm every win</div>
+        <div class="system-card-body">Tasks animate to green on completion. The mood picker rewrites the next session instantly. Tako (the AI) has bouncing-dot typing — feedback is the default.</div>
+      </div>
+    </div>
+    <div class="slide-footer"><div class="brand"><span class="brand-dot">t</span> taskko · HCI prototype</div><div style="font-family:JetBrains Mono,monospace">SYSTEM</div></div>
+  </section>
+
+  <!-- 3. Splash -->
+  <section class="slide-page" data-screen-label="03 Splash">
+    <div class="slide-two-col">
+      <div class="phone-stage"><img class="phone-img" src="caps/splash.png" alt="Splash screen"/></div>
+      <div>
+        <div class="slide-eyebrow">01 · First launch</div>
+        <div class="slide-title">Splash</div>
+        <div class="slide-lede">Cold-start screen. Builds brand recall while assets load. Holds the user briefly so the brand registers before any UI work begins.</div>
+        <div class="princ-list">
+          <div class="princ"><div class="princ-name">Recognition over recall</div><div class="princ-body">The mark is a checkmark in a squircle + a peach spark — the verb (mark done) and the streak motif are encoded in the brand itself.</div></div>
+          <div class="princ"><div class="princ-name">Colour &amp; emotion</div><div class="princ-body">Cool sky-blue gradient communicates calm focus; warm peach spark balances it with energy. The two product pillars in one sigil.</div></div>
+          <div class="princ"><div class="princ-name">Feedback (Nielsen #1)</div><div class="princ-body">Shimmer bar + "loading…" label tell the user the system is alive — no silent waits.</div></div>
+          <div class="princ"><div class="princ-name">Constraints</div><div class="princ-body">No tappable controls; prevents action before the app is ready. Auto-advances on a predictable clock.</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-footer"><div class="brand"><span class="brand-dot">t</span> taskko · HCI prototype</div><div style="font-family:JetBrains Mono,monospace">01 / 08</div></div>
+  </section>
+
+  <!-- 4. Onboarding -->
+  <section class="slide-page" data-screen-label="04 Onboarding">
+    <div class="slide-two-col">
+      <div class="phone-stage"><img class="phone-img" src="caps/onboarding.png" alt="Onboarding screen"/></div>
+      <div>
+        <div class="slide-eyebrow">02 · Onboarding (3 slides)</div>
+        <div class="slide-title">Plan → Streaks → Squad</div>
+        <div class="slide-lede">Three illustrated value-prop slides. Skip is on every slide; the last CTA changes from "Next" to "Get started" to close the arc.</div>
+        <div class="princ-list">
+          <div class="princ"><div class="princ-name">Affordance</div><div class="princ-body">"Next" CTA is the brightest element. "Skip" is muted in the corner — both visible, hierarchy clear.</div></div>
+          <div class="princ"><div class="princ-name">Escape hatch (Nielsen #3)</div><div class="princ-body">Skip is on every slide. Users are never trapped — exits cleanly to Sign-up.</div></div>
+          <div class="princ"><div class="princ-name">Chunking (Miller's law)</div><div class="princ-body">One idea per slide + one vignette illustration. Cognitive load minimised.</div></div>
+          <div class="princ"><div class="princ-name">Recognition</div><div class="princ-body">Slides preview real UI fragments (task cards, badge, leaderboard) so they're familiar when users meet them later.</div></div>
+          <div class="princ"><div class="princ-name">Closure (Gestalt)</div><div class="princ-body">Final CTA flips from "Next" to "Get started" — visual + verbal close on the onboarding arc.</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-footer"><div class="brand"><span class="brand-dot">t</span> taskko · HCI prototype</div><div style="font-family:JetBrains Mono,monospace">02 / 08</div></div>
+  </section>
+
+  <!-- 5. Sign up -->
+  <section class="slide-page" data-screen-label="05 Sign up">
+    <div class="slide-two-col">
+      <div class="phone-stage"><img class="phone-img" src="caps/signup.png" alt="Sign up screen"/></div>
+      <div>
+        <div class="slide-eyebrow">03 · Auth</div>
+        <div class="slide-title">Sign up</div>
+        <div class="slide-lede">Minimum-viable form: 3 fields + agree. Social options up top, real-time validation, password strength meter.</div>
+        <div class="princ-list">
+          <div class="princ"><div class="princ-name">Constraints</div><div class="princ-body">Real-time validation catches bad emails, short passwords, missing terms — errors prevented, not punished after submit (Norman).</div></div>
+          <div class="princ"><div class="princ-name">Feedback</div><div class="princ-body">Password strength bar fills as user types. Per-field error messages are specific, not generic "invalid".</div></div>
+          <div class="princ"><div class="princ-name">Visibility</div><div class="princ-body">Show/Hide password toggle lets users verify input — anti-frustration pattern.</div></div>
+          <div class="princ"><div class="princ-name">Affordance</div><div class="princ-body">Primary CTA is greyed and disabled until form is valid — it looks unclickable because it IS unclickable.</div></div>
+          <div class="princ"><div class="princ-name">Gulf of Execution</div><div class="princ-body">One clear forward path. No optional fields to dither over.</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-footer"><div class="brand"><span class="brand-dot">t</span> taskko · HCI prototype</div><div style="font-family:JetBrains Mono,monospace">03 / 08</div></div>
+  </section>
+
+  <!-- 6. Log in -->
+  <section class="slide-page" data-screen-label="06 Log in">
+    <div class="slide-two-col">
+      <div class="phone-stage"><img class="phone-img" src="caps/login.png" alt="Log in screen"/></div>
+      <div>
+        <div class="slide-eyebrow">04 · Auth</div>
+        <div class="slide-title">Log in</div>
+        <div class="slide-lede">Returning-user path. Bigger logo for instant recognition; re-engagement copy primes the variable reward.</div>
+        <div class="princ-list">
+          <div class="princ"><div class="princ-name">Recognition over recall</div><div class="princ-body">Large logo at top — returning users see the brand instantly, confirming they're in the right place.</div></div>
+          <div class="princ"><div class="princ-name">Proximity (Gestalt)</div><div class="princ-body">"Forgot?" sits inline with the password field it relates to, not in a hidden menu.</div></div>
+          <div class="princ"><div class="princ-name">Emotion (Hook model)</div><div class="princ-body">"Your streak's waiting" is a variable-reward cue — re-engagement built into the gate.</div></div>
+          <div class="princ"><div class="princ-name">Constraints</div><div class="princ-body">CTA disabled until both fields look valid. No submit-and-shame loop.</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-footer"><div class="brand"><span class="brand-dot">t</span> taskko · HCI prototype</div><div style="font-family:JetBrains Mono,monospace">04 / 08</div></div>
+  </section>
+
+  <!-- 7. Home -->
+  <section class="slide-page" data-screen-label="07 Home">
+    <div class="slide-two-col">
+      <div class="phone-stage"><img class="phone-img" src="caps/home.png" alt="Home dashboard"/></div>
+      <div>
+        <div class="slide-eyebrow">05 · Core</div>
+        <div class="slide-title">Home / Dashboard</div>
+        <div class="slide-lede">Pull-of-the-day surface. Surfaces exactly one obvious next action. Stats above the fold answer "how am I doing?" in under a second.</div>
+        <div class="princ-list">
+          <div class="princ"><div class="princ-name">Visibility</div><div class="princ-body">Streak, rank, mood, next task all visible without scroll — no menus needed.</div></div>
+          <div class="princ"><div class="princ-name">Mapping</div><div class="princ-body">Mood emoji directly drives session length and break ratio. Input maps to output.</div></div>
+          <div class="princ"><div class="princ-name">Gulf of Execution</div><div class="princ-body">Hero "Next up" card states verb + concrete task — students never wonder what to start.</div></div>
+          <div class="princ"><div class="princ-name">Gulf of Evaluation</div><div class="princ-body">Progress bars on streak (5/5) + rank (68% to Elite) make state instantly readable.</div></div>
+          <div class="princ"><div class="princ-name">Visual hierarchy</div><div class="princ-body">CTA uses the most saturated colour. Stats use medium contrast. Tasks neutral.</div></div>
+          <div class="princ"><div class="princ-name">Colour &amp; burnout</div><div class="princ-body">Warm peach = energy. Cool sky-blue = focus. Low-sat mint background reduces eye fatigue.</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-footer"><div class="brand"><span class="brand-dot">t</span> taskko · HCI prototype</div><div style="font-family:JetBrains Mono,monospace">05 / 08</div></div>
+  </section>
+
+  <!-- 8. Plan -->
+  <section class="slide-page" data-screen-label="08 AI Plan">
+    <div class="slide-two-col">
+      <div class="phone-stage"><img class="phone-img" src="caps/plan.png" alt="AI Task Breakdown"/></div>
+      <div>
+        <div class="slide-eyebrow">06 · Core</div>
+        <div class="slide-title">AI Task Breakdown</div>
+        <div class="slide-lede">Bridges the hardest student problem: "where do I even start?" Takes a big, vague goal and produces a reviewable, editable plan.</div>
+        <div class="princ-list">
+          <div class="princ"><div class="princ-name">Affordance</div><div class="princ-body">Textbox looks like a textbox. "Break it down" button has gradient + lift shadow — pressable.</div></div>
+          <div class="princ"><div class="princ-name">Constraints</div><div class="princ-body">Sample-goal chips bound the AI input space without restricting freedom. Prevents junk prompts upstream.</div></div>
+          <div class="princ"><div class="princ-name">Feedback</div><div class="princ-body">4-step parsing indicator during generation. Each step lights up as it completes.</div></div>
+          <div class="princ"><div class="princ-name">Mapping</div><div class="princ-body">Top progress indicator matches actual flow position (Goal → Break down → Customize).</div></div>
+          <div class="princ"><div class="princ-name">Closure (Gestalt)</div><div class="princ-body">Numbered identical cards form a clear list gestalt. Total time/points footer closes the loop.</div></div>
+          <div class="princ"><div class="princ-name">User control</div><div class="princ-body">AI suggests; user decides — every task is editable, deletable, regenerable.</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-footer"><div class="brand"><span class="brand-dot">t</span> taskko · HCI prototype</div><div style="font-family:JetBrains Mono,monospace">06 / 08</div></div>
+  </section>
+
+  <!-- 9. Hub -->
+  <section class="slide-page" data-screen-label="09 Hub">
+    <div class="slide-two-col">
+      <div class="phone-stage"><img class="phone-img" src="caps/hub.png" alt="Gamification Hub"/></div>
+      <div>
+        <div class="slide-eyebrow">07 · Core</div>
+        <div class="slide-title">Gamification &amp; Social Hub</div>
+        <div class="slide-lede">Balances dopamine (badges, leaderboard) with reflection (report card). One-tap sharing turns wins into accountability + organic growth.</div>
+        <div class="princ-list">
+          <div class="princ"><div class="princ-name">Visibility</div><div class="princ-body">Newly unlocked badge surfaces at top with an immediate Share affordance. Celebration is instant.</div></div>
+          <div class="princ"><div class="princ-name">Similarity (Gestalt)</div><div class="princ-body">All badges share an octagonal medal shape; only colour/saturation differentiate earned vs locked.</div></div>
+          <div class="princ"><div class="princ-name">Hierarchy (leaderboard)</div><div class="princ-body">"You" row uses primary accent + bolder weight — findable in ≤1 second.</div></div>
+          <div class="princ"><div class="princ-name">Closure</div><div class="princ-body">Weekly report card summarises a week into 4 stats + a sparkline — a complete, shareable unit.</div></div>
+          <div class="princ"><div class="princ-name">Mapping</div><div class="princ-body">Share button produces an actual preview of what will post — WYSIWYG.</div></div>
+          <div class="princ"><div class="princ-name">Avoiding overwhelm</div><div class="princ-body">Gamification is scoped to its own tab; never leaks into productivity surfaces.</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-footer"><div class="brand"><span class="brand-dot">t</span> taskko · HCI prototype</div><div style="font-family:JetBrains Mono,monospace">07 / 08</div></div>
+  </section>
+
+  <!-- 10. Chat -->
+  <section class="slide-page" data-screen-label="10 Chat">
+    <div class="slide-two-col">
+      <div class="phone-stage"><img class="phone-img" src="caps/chat.png" alt="AI Chatbot Tako"/></div>
+      <div>
+        <div class="slide-eyebrow">08 · Core</div>
+        <div class="slide-title">AI Chatbot — Tako</div>
+        <div class="slide-lede">Conversational interface for emotional support + re-planning. Designed to feel like a friend, not a tool. Mood-aware avatar matches user state.</div>
+        <div class="princ-list">
+          <div class="princ"><div class="princ-name">Proximity (Gestalt)</div><div class="princ-body">Same-speaker messages are spatially grouped. Avatar appears once per block, not per message.</div></div>
+          <div class="princ"><div class="princ-name">Continuity</div><div class="princ-body">Bubbles flow top-down in time order. New messages animate in, anchoring the eye.</div></div>
+          <div class="princ"><div class="princ-name">Colour coding</div><div class="princ-body">User = primary blue. Tako = white with subtle border. Dialogue readable at a glance.</div></div>
+          <div class="princ"><div class="princ-name">Affordance</div><div class="princ-body">Quick-prompt chips above the input remove the cold-start problem.</div></div>
+          <div class="princ"><div class="princ-name">Feedback</div><div class="princ-body">Typing indicator with bouncing dots — no silent waits.</div></div>
+          <div class="princ"><div class="princ-name">Nudge separation</div><div class="princ-body">High-priority nudge cards render with distinct gradient + action buttons.</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-footer"><div class="brand"><span class="brand-dot">t</span> taskko · HCI prototype</div><div style="font-family:JetBrains Mono,monospace">08 / 08</div></div>
+  </section>
+
+  <!-- 11. Closer -->
+  <section class="slide-page closer">
+    <div class="closer-logo">
+      <div class="closer-check"></div>
+    </div>
+    <div class="closer-title">taskko</div>
+    <div class="closer-sub">Big goals, bite-sized wins.<br/>Designed for the way students actually study.</div>
+  </section>
+</div>
+
+
+</body>
+</html>

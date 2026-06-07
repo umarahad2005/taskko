@@ -1,0 +1,24 @@
+{
+  "firestore": {
+    "rules": "admin/firestore.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "taskko",
+          "appId": "1:260736761827:android:ea4a00cc1479c13d302ad6",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "taskko",
+          "configurations": {
+            "android": "1:260736761827:android:ea4a00cc1479c13d302ad6"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,77 @@
+/* Taskko Admin — global styles (M8).
+   Fonts per SRS §7.2: Manrope (UI), Fraunces (display), JetBrains Mono (stats). */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=JetBrains+Mono:wght@400..700&family=Manrope:wght@400..800&display=swap');
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#__next {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  font-family: Manrope, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: #0f0f1a;
+  background: #fafbfd;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.mono {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.display {
+  font-family: Fraunces, Georgia, serif;
+}
+
+/* Subtle press feedback, matching the prototype's `.tap`. */
+.tap {
+  transition: transform 0.08s ease, background 0.15s ease, color 0.15s ease;
+}
+.tap:active {
+  transform: scale(0.97);
+}
+
+button {
+  font-family: inherit;
+}
+
+input,
+select {
+  font-family: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #dcdce7;
+  border-radius: 99px;
+  border: 2px solid #fafbfd;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8bc;
+}
+
+/* Spinner used by loading states. */
+@keyframes tk-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.tk-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2.5px solid #ececf3;
+  border-top-color: #1fb6f0;
+  border-radius: 99px;
+  animation: tk-spin 0.7s linear infinite;
+}
