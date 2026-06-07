@@ -33,7 +33,8 @@ class HomeCubit extends Cubit<HomeState> {
     }
   }
 
-  /// Toggle a task's completion, award/retract its points, and persist (FR-4.7).
+  /// Toggle a task's completion; the repository awards/retracts points and
+  /// updates the streak in Firestore, returning the updated profile (FR-4.7).
   Future<void> toggleTask(String id) async {
     final user = state.user;
     final index = state.tasks.indexWhere((t) => t.id == id);
@@ -42,17 +43,20 @@ class HomeCubit extends Cubit<HomeState> {
     final task = state.tasks[index];
     final nowDone = !task.done;
     final tasks = List<TaskItem>.of(state.tasks)..[index] = task.copyWith(done: nowDone);
-    final points = (user.points + (nowDone ? task.points : -task.points)).clamp(0, 1 << 30);
+    emit(state.copyWith(tasks: tasks)); // optimistic
 
-    emit(state.copyWith(tasks: tasks, user: user.copyWith(points: points)));
     await _tasks.setDone(id, done: nowDone);
+    final updated = await _gamification.recordTaskCompletion(points: task.points, nowDone: nowDone);
+    emit(state.copyWith(user: updated, tasks: tasks));
   }
 
-  /// Record a mood check-in (SRS FR-4.4 / FR-9).
-  void setMood(Mood mood) {
+  /// Record a mood check-in and persist it to the profile (SRS FR-4.4 / FR-9).
+  Future<void> setMood(Mood mood) async {
     final user = state.user;
     if (user == null) return;
-    emit(state.copyWith(user: user.copyWith(mood: mood)));
+    emit(state.copyWith(user: user.copyWith(mood: mood))); // optimistic
+    final updated = await _gamification.setMood(mood);
+    emit(state.copyWith(user: updated));
   }
 
   /// True when the last [toggleTask] pushed the user into a new rank — the UI

@@ -10,12 +10,20 @@ import '../repositories/backend/ai_api_client.dart';
 import '../repositories/backend/chat_repository_http.dart';
 import '../repositories/backend/plan_repository_http.dart';
 import '../repositories/firebase/auth_repository_firebase.dart';
+import '../repositories/firebase/gamification_repository_firestore.dart';
+import '../repositories/firebase/session_repository_firestore.dart';
+import '../repositories/firebase/settings_repository_firestore.dart';
+import '../repositories/firebase/tasks_repository_firestore.dart';
 import '../repositories/mock/auth_repository_mock.dart';
 import '../repositories/mock/chat_repository_mock.dart';
 import '../repositories/mock/gamification_repository_mock.dart';
 import '../repositories/mock/plan_repository_mock.dart';
+import '../repositories/mock/session_repository_mock.dart';
+import '../repositories/mock/settings_repository_mock.dart';
 import '../repositories/mock/tasks_repository_mock.dart';
 import '../repositories/plan_repository.dart';
+import '../repositories/session_repository.dart';
+import '../repositories/settings_repository.dart';
 import '../repositories/tasks_repository.dart';
 import '../theme/app_theme.dart';
 import 'router.dart';
@@ -33,7 +41,7 @@ class TaskkoApp extends StatelessWidget {
   /// app runs on mocks without a server; enable with `--dart-define=USE_BACKEND=true`
   /// (also set BACKEND_URL). Requires a signed-in Firebase user + the backend's
   /// FIREBASE_SERVICE_ACCOUNT so it can verify the token.
-  static const bool useBackend = bool.fromEnvironment('USE_BACKEND', defaultValue: false);
+  static const bool useBackend = bool.fromEnvironment('USE_BACKEND', defaultValue: true);
 
   @override
   Widget build(BuildContext context) {
@@ -42,13 +50,23 @@ class TaskkoApp extends StatelessWidget {
         RepositoryProvider<AuthRepository>(
           create: (_) => useFirebase ? FirebaseAuthRepository() : AuthRepositoryMock(),
         ),
-        RepositoryProvider<TasksRepository>(create: (_) => TasksRepositoryMock()),
-        RepositoryProvider<GamificationRepository>(create: (_) => GamificationRepositoryMock()),
+        RepositoryProvider<TasksRepository>(
+          create: (_) => useFirebase ? TasksRepositoryFirestore() : TasksRepositoryMock(),
+        ),
+        RepositoryProvider<GamificationRepository>(
+          create: (_) => useFirebase ? GamificationRepositoryFirestore() : GamificationRepositoryMock(),
+        ),
         RepositoryProvider<PlanRepository>(
           create: (_) => useBackend ? PlanRepositoryHttp(AiApiClient()) : PlanRepositoryMock(),
         ),
         RepositoryProvider<ChatRepository>(
           create: (_) => useBackend ? ChatRepositoryHttp(AiApiClient()) : ChatRepositoryMock(),
+        ),
+        RepositoryProvider<SettingsRepository>(
+          create: (_) => useFirebase ? SettingsRepositoryFirestore() : SettingsRepositoryMock(),
+        ),
+        RepositoryProvider<SessionRepository>(
+          create: (_) => useFirebase ? SessionRepositoryFirestore() : SessionRepositoryMock(),
         ),
       ],
       child: MultiBlocProvider(

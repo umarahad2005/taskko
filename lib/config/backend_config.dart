@@ -7,5 +7,5 @@
 ///   --dart-define=BACKEND_URL=http://192.168.1.20:3000   (physical device on LAN)
 abstract final class BackendConfig {
   static const String baseUrl =
-      String.fromEnvironment('BACKEND_URL', defaultValue: 'http://10.0.2.2:3000');
+      String.fromEnvironment('BACKEND_URL', defaultValue: 'https://taskkoadmin.vercel.app');
 }

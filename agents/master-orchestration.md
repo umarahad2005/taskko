@@ -116,6 +116,13 @@ Subagents end with a compact, structured result so the master can track state wi
 
 ---
 
+## 7b. Phase 2 backlog — see `../docs/IMPLEMENTATION_PLAN.md`
+Post-MVP, all free (monetization deferred). Sprint 1 (app-only): **M10 Reminders**, **M11 History/stats**, **M12 Reflection**. Sprint 2: **M13 AI plan-day+quiz**, **M16 Real admin data**. Sprint 3: **M14 Social**, **M15 Hardening**. **M17 Monetization** deferred (post-funding).
+- **M10 Scheduled reminders ✔** — `services/notification_service.dart` (zonedSchedule + timezone), `repositories/settings_repository*` (Firestore prefs at `users/{uid}/settings/reminders`), `features/settings` (cubit+screen), opened from Profile. Android needed **core library desugaring** (`isCoreLibraryDesugaringEnabled=true` + `desugar_jdk_libs:2.1.4` in `android/app/build.gradle.kts`) for flutter_local_notifications.
+- **M11 History/stats ✔** — `models/focus_session.dart`, `repositories/session_repository*`, `features/history` (cubit + screen, dependency-free 7-day bar chart). Focus completion logs a session.
+- **M12 Reflection ✔** — 😫/😐/😀 rating at focus-session end, stored on the session.
+- **Sprint 1 complete (M10–M12).** Next: Sprint 2 = M13 (AI plan-day+quiz, needs backend redeploy) + M16 (real admin data).
+
 ## 7. Escalation triggers (ask the user, don't assume)
 - Firebase project / Gemini key / Vercel account access or quotas.
 - Any visual ambiguity not resolvable from `frames/` + SRS §7.

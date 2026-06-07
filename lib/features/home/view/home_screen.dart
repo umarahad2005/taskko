@@ -12,6 +12,7 @@ import '../../../theme/app_typography.dart';
 import '../../../widgets/section_header.dart';
 import '../../../widgets/tab_scaffold.dart';
 import '../../../widgets/taskko_logo.dart';
+import '../../focus/view/focus_timer_screen.dart';
 import '../cubit/home_cubit.dart';
 import '../widgets/home_widgets.dart';
 
@@ -66,7 +67,12 @@ class _HomeBody extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             NextUpCard(
               task: state.nextTask,
-              onStart: () => _snack(context, 'Focus session starting — you\'ve got this.'),
+              onStart: () async {
+                final task = state.nextTask;
+                if (task == null) return;
+                final done = await context.push<bool>('/focus', extra: FocusArgs(task: task, mood: user.mood));
+                if (done == true) cubit.toggleTask(task.id);
+              },
               onSkip: () => _snack(context, 'Skipped — I\'ll resurface it later.'),
             ),
             const SizedBox(height: AppSpacing.xl),
@@ -111,10 +117,13 @@ class _Header extends StatelessWidget {
         ],
         _CircleIcon(icon: Icons.notifications_none_rounded, onTap: () {}),
         const SizedBox(width: AppSpacing.sm),
-        CircleAvatar(
-          radius: 18,
-          backgroundColor: AppColors.energy,
-          child: Text(user.initials, style: AppTypography.ui(15, color: Colors.white, weight: FontWeight.w800)),
+        GestureDetector(
+          onTap: () => context.push('/profile'),
+          child: CircleAvatar(
+            radius: 18,
+            backgroundColor: AppColors.energy,
+            child: Text(user.initials, style: AppTypography.ui(15, color: Colors.white, weight: FontWeight.w800)),
+          ),
         ),
       ],
     );

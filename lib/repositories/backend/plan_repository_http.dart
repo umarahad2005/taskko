@@ -1,13 +1,33 @@
+import '../../models/clarify_question.dart';
 import '../../models/plan_task.dart';
 import '../plan_repository.dart';
 import 'ai_api_client.dart';
 
-/// Real AI Plan Studio repository — calls the backend `/api/ai/breakdown`
-/// (Gemini) instead of the scripted mock (SRS FR-5.3).
+/// Real AI Plan Studio repository — calls the backend `/api/ai/clarify` +
+/// `/api/ai/breakdown` (Gemini) instead of the scripted mock (SRS FR-5).
 class PlanRepositoryHttp implements PlanRepository {
   PlanRepositoryHttp(this._api);
 
   final AiApiClient _api;
+
+  @override
+  Future<List<ClarifyQuestion>> clarify(String goal) async {
+    try {
+      final json = await _api.postJson('/api/ai/clarify', {'goal': goal});
+      final raw = (json['questions'] as List?) ?? const [];
+      return raw
+          .whereType<Map<String, dynamic>>()
+          .map((m) => ClarifyQuestion(
+                question: (m['question'] as String?) ?? '',
+                options: ((m['options'] as List?) ?? const []).whereType<String>().toList(),
+              ))
+          .where((q) => q.question.isNotEmpty)
+          .toList();
+    } catch (_) {
+      // Endpoint not deployed yet / error → skip clarification gracefully.
+      return const [];
+    }
+  }
 
   @override
   Future<List<PlanTask>> breakdown(String goal) async {

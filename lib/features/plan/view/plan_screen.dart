@@ -82,6 +82,8 @@ class _PlanBodyState extends State<_PlanBody> {
     switch (state.step) {
       case PlanStep.input:
         return _InputPhase(controller: _goalCtrl, error: state.error);
+      case PlanStep.clarify:
+        return _ClarifyPhase(state: state);
       case PlanStep.generating:
         return const _GeneratingPhase();
       case PlanStep.review:
@@ -181,7 +183,7 @@ class _ReviewPhase extends StatelessWidget {
                 ],
               ),
             ),
-            _RegenButton(onTap: cubit.generate),
+            _RegenButton(onTap: cubit.regenerate),
           ],
         ),
         const SizedBox(height: AppSpacing.lg),
@@ -263,6 +265,96 @@ class _AddTaskButton extends StatelessWidget {
           const SizedBox(width: 4),
           Text('Add a task', style: AppTypography.ui(14, color: AppColors.ink3, weight: FontWeight.w700)),
         ]),
+      ),
+    );
+  }
+}
+
+/// Step between goal and breakdown: Tako's clarifying questions (SRS FR-5.2).
+class _ClarifyPhase extends StatelessWidget {
+  const _ClarifyPhase({required this.state});
+  final PlanState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final cubit = context.read<PlanCubit>();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('A few quick questions', style: AppTypography.display(24)),
+        const SizedBox(height: 4),
+        Text('So Tako can tailor your plan to exactly what you need.',
+            style: AppTypography.ui(14, color: AppColors.ink3, weight: FontWeight.w500)),
+        const SizedBox(height: AppSpacing.lg),
+        Expanded(
+          child: ListView.separated(
+            itemCount: state.questions.length,
+            separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.lg),
+            itemBuilder: (context, i) {
+              final q = state.questions[i];
+              final selected = state.answers[q.question];
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(q.question, style: AppTypography.ui(15, weight: FontWeight.w700)),
+                  const SizedBox(height: AppSpacing.sm),
+                  if (q.options.isNotEmpty)
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.sm,
+                      children: [
+                        for (final o in q.options)
+                          _ClarifyChip(
+                            label: o,
+                            selected: selected == o,
+                            onTap: () => cubit.answerQuestion(q.question, o),
+                          ),
+                      ],
+                    )
+                  else
+                    TextField(
+                      decoration: const InputDecoration(hintText: 'Your answer'),
+                      onChanged: (v) => cubit.answerQuestion(q.question, v),
+                    ),
+                ],
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        PrimaryButton(label: 'Generate my plan', icon: Icons.auto_awesome_rounded, onPressed: cubit.submitClarify),
+        const SizedBox(height: 6),
+        Center(
+          child: TextButton(
+            onPressed: cubit.skipClarify,
+            child: Text('Skip — just use my goal',
+                style: AppTypography.ui(13, color: AppColors.ink3, weight: FontWeight.w700)),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ClarifyChip extends StatelessWidget {
+  const _ClarifyChip({required this.label, required this.selected, required this.onTap});
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : AppColors.surface,
+          borderRadius: AppRadii.pillRadius,
+          border: Border.all(color: selected ? AppColors.primary : AppColors.line2),
+        ),
+        child: Text(label,
+            style: AppTypography.ui(13, color: selected ? Colors.white : AppColors.ink2, weight: FontWeight.w600)),
       ),
     );
   }

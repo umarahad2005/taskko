@@ -370,6 +370,64 @@ export async function generateMoodSession(
 }
 
 // ---------------------------------------------------------------------------
+// Feature: clarify (smarter task intake, FR-5.2) — ask clarifying questions to
+// better classify an ambiguous goal before breaking it down.
+// ---------------------------------------------------------------------------
+
+export interface ClarifyQuestion {
+  question: string;
+  options: string[];
+}
+
+export function buildClarifyPrompt(goal: string): string {
+  return [
+    TAKO_PERSONA,
+    '',
+    `A student wants help with this goal/task: "${goal}".`,
+    'If it is ambiguous, ask up to 3 SHORT clarifying questions that would let you',
+    'build a far more specific, useful plan (e.g. subject, scope, deadline, format,',
+    'difficulty, number of items). For each question, suggest 2-4 quick-pick options.',
+    'If the goal is already clear and specific, return an empty array.',
+    '',
+    'Respond ONLY with JSON, no prose, in this shape:',
+    '[{"question": string, "options": [string]}]',
+  ].join('\n');
+}
+
+export function parseClarify(raw: string): ClarifyQuestion[] {
+  let data: unknown;
+  try {
+    data = JSON.parse(stripJsonFences(raw));
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(data)) return [];
+  const out: ClarifyQuestion[] = [];
+  for (const item of data) {
+    if (typeof item !== 'object' || item === null) continue;
+    const o = item as Record<string, unknown>;
+    const q = typeof o.question === 'string' ? o.question.trim() : '';
+    if (!q) continue;
+    const options = Array.isArray(o.options)
+      ? o.options.filter((x): x is string => typeof x === 'string').map((s) => s.trim()).slice(0, 4)
+      : [];
+    out.push({ question: q.slice(0, 160), options });
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
+export async function generateClarify(goal: string): Promise<{ questions: ClarifyQuestion[] }> {
+  try {
+    const raw = await generateText(buildClarifyPrompt(goal), { json: true, maxOutputTokens: 400 });
+    return { questions: parseClarify(raw) };
+  } catch (err) {
+    logFailure('clarify', err);
+    return { questions: [] };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
 
