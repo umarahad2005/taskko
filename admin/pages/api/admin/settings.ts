@@ -1,20 +1,15 @@
 /**
- * /api/admin/settings — feature flags + admin team (FR-11.8). Admin-only.
+ * /api/admin/settings — real feature flags + admin team (FR-11.8). Admin-only.
+ * Flags live in Firestore `config/featureFlags`; the admin team is derived from
+ * Firebase Auth users carrying the `admin` custom claim.
  *
- * GET   → { flags: Record<string, boolean>, adminTeam: AdminMember[] }
- * PATCH body: { flags?: Record<string, boolean> } → echoes the merged settings
- *
- * Errors: 401, 403, 500 { error, retryable }
- * TODO(M9): persist to `config/featureFlags` and the admin team in Firestore.
+ * GET   → { flags, adminTeam }
+ * PATCH { flags } → merged { flags, adminTeam }
  */
 import type { NextApiResponse } from 'next';
 import { withAdmin, type AuthedRequest } from '../../../lib/auth';
 import { methodGuard, sendJson } from '../../../lib/http';
-
-interface AdminMember {
-  email: string;
-  role: 'owner' | 'admin';
-}
+import { adminAuth, adminDb } from '../../../lib/firebaseAdmin';
 
 const DEFAULT_FLAGS: Record<string, boolean> = {
   aiBreakdownEnabled: true,
@@ -24,18 +19,26 @@ const DEFAULT_FLAGS: Record<string, boolean> = {
   maintenanceMode: false,
 };
 
-const ADMIN_TEAM: AdminMember[] = [
-  { email: 'admin@taskko.app', role: 'owner' },
-];
+const _flagsDoc = () => adminDb().doc('config/featureFlags');
+
+async function adminTeam(): Promise<{ email: string; role: string }[]> {
+  const list = await adminAuth().listUsers(1000);
+  return list.users
+    .filter((u) => u.customClaims?.admin === true || u.customClaims?.isAdmin === true)
+    .map((u) => ({ email: u.email ?? u.uid, role: 'admin' }));
+}
 
 export default withAdmin(async (req: AuthedRequest, res: NextApiResponse) => {
   if (!methodGuard(req, res, ['GET', 'PATCH'])) return;
 
-  if (req.method === 'GET') {
-    return sendJson(res, { flags: DEFAULT_FLAGS, adminTeam: ADMIN_TEAM, stub: true });
+  if (req.method === 'PATCH') {
+    const { flags } = (req.body ?? {}) as { flags?: Record<string, boolean> };
+    if (flags && typeof flags === 'object') {
+      await _flagsDoc().set(flags, { merge: true });
+    }
   }
 
-  const { flags } = (req.body ?? {}) as { flags?: Record<string, boolean> };
-  const merged = { ...DEFAULT_FLAGS, ...(flags ?? {}) };
-  sendJson(res, { flags: merged, adminTeam: ADMIN_TEAM, stub: true });
+  const snap = await _flagsDoc().get();
+  const flags = { ...DEFAULT_FLAGS, ...(snap.data() ?? {}) };
+  sendJson(res, { flags, adminTeam: await adminTeam() });
 });

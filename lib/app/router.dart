@@ -11,7 +11,9 @@ import '../features/home/view/home_screen.dart';
 import '../features/hub/view/hub_screen.dart';
 import '../features/onboarding/view/onboarding_screen.dart';
 import '../features/plan/view/plan_screen.dart';
+import '../features/planday/view/plan_day_screen.dart';
 import '../features/profile/view/profile_screen.dart';
+import '../features/quiz/view/quiz_screen.dart';
 import '../features/settings/view/settings_screen.dart';
 import '../features/splash/view/splash_screen.dart';
 
@@ -31,6 +33,15 @@ final GoRouter appRouter = GoRouter(
     GoRoute(path: '/profile', builder: (_, _) => const ProfileScreen()),
     GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
     GoRoute(path: '/history', builder: (_, _) => const HistoryScreen()),
+    GoRoute(path: '/quiz', builder: (_, _) => const QuizScreen()),
+    GoRoute(
+      path: '/planday',
+      builder: (context, state) {
+        final args = state.extra;
+        if (args is PlanDayArgs) return PlanDayScreen(args: args);
+        return const Scaffold(body: Center(child: Text('No tasks to plan')));
+      },
+    ),
     GoRoute(
       path: '/focus',
       builder: (context, state) {

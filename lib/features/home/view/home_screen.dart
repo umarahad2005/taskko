@@ -9,10 +9,12 @@ import '../../../repositories/tasks_repository.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_radii.dart';
 import '../../../theme/app_typography.dart';
+import '../../../widgets/secondary_button.dart';
 import '../../../widgets/section_header.dart';
 import '../../../widgets/tab_scaffold.dart';
 import '../../../widgets/taskko_logo.dart';
 import '../../focus/view/focus_timer_screen.dart';
+import '../../planday/view/plan_day_screen.dart';
 import '../cubit/home_cubit.dart';
 import '../widgets/home_widgets.dart';
 
@@ -53,6 +55,18 @@ class _HomeBody extends StatelessWidget {
             _Header(user: user),
             const SizedBox(height: AppSpacing.lg),
             _Greeting(name: user.name, remaining: state.remaining),
+            const SizedBox(height: AppSpacing.md),
+            Row(children: [
+              Expanded(
+                child: SecondaryButton(
+                  label: 'Plan my day',
+                  filled: true,
+                  onPressed: () => context.push('/planday', extra: PlanDayArgs(tasks: state.tasks, mood: user.mood)),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(child: SecondaryButton(label: 'Quiz me', filled: true, onPressed: () => context.push('/quiz'))),
+            ]),
             const SizedBox(height: AppSpacing.lg),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,

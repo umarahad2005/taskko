@@ -14,6 +14,8 @@
  * The key (GEMINI_API_KEY) is read from env only — never shipped to the client.
  */
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { FieldValue } from 'firebase-admin/firestore';
+import { adminDb } from './firebaseAdmin';
 
 const DEFAULT_MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash';
 // Bound Gemini work to stay under the Vercel function limit (NFR-1, §9 risk).
@@ -84,7 +86,7 @@ export interface MoodSession {
 
 async function generateText(
   prompt: string,
-  opts?: { json?: boolean; maxOutputTokens?: number },
+  opts?: { json?: boolean; maxOutputTokens?: number; feature?: string },
 ): Promise<string> {
   const model = client().getGenerativeModel({
     model: DEFAULT_MODEL,
@@ -99,12 +101,16 @@ async function generateText(
     setTimeout(() => reject(new GeminiError('Gemini request timed out')), GEMINI_TIMEOUT_MS),
   );
 
+  const started = Date.now();
+  const feature = opts?.feature ?? 'unknown';
   try {
     const result = await Promise.race([model.generateContent(prompt), timeout]);
     const text = (result as Awaited<ReturnType<typeof model.generateContent>>).response.text();
     if (!text || !text.trim()) throw new GeminiError('Empty response from Gemini');
+    logUsage(feature, false, Date.now() - started);
     return text;
   } catch (err) {
+    logUsage(feature, true, Date.now() - started);
     if (err instanceof GeminiError) throw err;
     throw new GeminiError(`Gemini call failed: ${(err as Error).message}`);
   }
@@ -200,6 +206,7 @@ export async function generateBreakdown(
     const raw = await generateText(buildBreakdownPrompt(goal, availableMinutes), {
       json: true,
       maxOutputTokens: 1024,
+      feature: 'breakdown',
     });
     return { tasks: parseBreakdown(raw), fallback: false };
   } catch (err) {
@@ -222,7 +229,7 @@ export async function regenerateBreakdown(
     ? `\nProduce a DIFFERENT plan. Avoid repeating these previous tasks: ${avoid.join('; ')}.`
     : '\nProduce a fresh alternative plan with different phrasing and structure.';
   try {
-    const raw = await generateText(base + avoidNote, { json: true, maxOutputTokens: 1024 });
+    const raw = await generateText(base + avoidNote, { json: true, maxOutputTokens: 1024, feature: 'regenerate' });
     return { tasks: parseBreakdown(raw), fallback: false };
   } catch (err) {
     logFailure('regenerate', err);
@@ -255,7 +262,7 @@ export async function generateChatReply(
   ctx: UserContext,
 ): Promise<{ reply: string; fallback: boolean }> {
   try {
-    const raw = await generateText(buildChatPrompt(message, ctx), { maxOutputTokens: 400 });
+    const raw = await generateText(buildChatPrompt(message, ctx), { maxOutputTokens: 400, feature: 'chat' });
     return { reply: raw.trim(), fallback: false };
   } catch (err) {
     logFailure('chat', err);
@@ -294,7 +301,7 @@ export async function generateNudge(
   ctx: UserContext,
 ): Promise<{ nudge: NudgeCard; fallback: boolean }> {
   try {
-    const raw = await generateText(buildNudgePrompt(ctx), { maxOutputTokens: 200 });
+    const raw = await generateText(buildNudgePrompt(ctx), { maxOutputTokens: 200, feature: 'nudge' });
     return { nudge: { text: raw.trim(), actions: NUDGE_ACTIONS }, fallback: false };
   } catch (err) {
     logFailure('nudge', err);
@@ -361,6 +368,7 @@ export async function generateMoodSession(
     const raw = await generateText(buildMoodSessionPrompt(mood, ctx), {
       json: true,
       maxOutputTokens: 300,
+      feature: 'mood-session',
     });
     return { session: parseMoodSession(raw), fallback: false };
   } catch (err) {
@@ -419,10 +427,147 @@ export function parseClarify(raw: string): ClarifyQuestion[] {
 
 export async function generateClarify(goal: string): Promise<{ questions: ClarifyQuestion[] }> {
   try {
-    const raw = await generateText(buildClarifyPrompt(goal), { json: true, maxOutputTokens: 400 });
+    const raw = await generateText(buildClarifyPrompt(goal), { json: true, maxOutputTokens: 400, feature: 'clarify' });
     return { questions: parseClarify(raw) };
   } catch (err) {
     logFailure('clarify', err);
+    return { questions: [] };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Feature: plan-day — time-block today's tasks by available time + mood.
+// ---------------------------------------------------------------------------
+
+export interface DayBlock {
+  start: string;
+  end: string;
+  taskTitle: string;
+}
+
+export function buildPlanDayPrompt(
+  tasks: { title: string; minutes: number }[],
+  availableMinutes: number,
+  mood: string,
+): string {
+  const list = tasks.map((t) => `- ${t.title} (~${t.minutes}m)`).join('\n');
+  return [
+    TAKO_PERSONA,
+    '',
+    `Schedule today's tasks into time blocks. Student mood: ${mood}. Available: ~${availableMinutes} minutes.`,
+    'Add short breaks between work blocks; if the mood is drained, use shorter blocks + more breaks.',
+    'Tasks:',
+    list || '- (no tasks yet)',
+    '',
+    'Respond ONLY with JSON, no prose:',
+    '[{"start":"HH:MM","end":"HH:MM","taskTitle":string}]  (use taskTitle "Break" for breaks)',
+  ].join('\n');
+}
+
+export function parsePlanDay(raw: string): DayBlock[] {
+  let data: unknown;
+  try {
+    data = JSON.parse(stripJsonFences(raw));
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(data)) return [];
+  const out: DayBlock[] = [];
+  for (const item of data) {
+    if (typeof item !== 'object' || item === null) continue;
+    const o = item as Record<string, unknown>;
+    const start = typeof o.start === 'string' ? o.start : '';
+    const end = typeof o.end === 'string' ? o.end : '';
+    const taskTitle = typeof o.taskTitle === 'string' ? o.taskTitle.trim() : '';
+    if (start && end && taskTitle) out.push({ start, end, taskTitle: taskTitle.slice(0, 120) });
+    if (out.length >= 20) break;
+  }
+  return out;
+}
+
+export async function generatePlanDay(
+  tasks: { title: string; minutes: number }[],
+  availableMinutes: number,
+  mood: string,
+): Promise<{ blocks: DayBlock[] }> {
+  try {
+    const raw = await generateText(buildPlanDayPrompt(tasks, availableMinutes, mood), {
+      json: true,
+      maxOutputTokens: 700,
+      feature: 'plan-day',
+    });
+    return { blocks: parsePlanDay(raw) };
+  } catch (err) {
+    logFailure('plan-day', err);
+    return { blocks: [] };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Feature: quiz — generate a study quiz on a topic.
+// ---------------------------------------------------------------------------
+
+export interface QuizQuestion {
+  q: string;
+  options: string[];
+  answerIndex: number;
+}
+
+export function buildQuizPrompt(topic: string, count: number, difficulty: string): string {
+  return [
+    TAKO_PERSONA,
+    '',
+    `Create a ${difficulty} multiple-choice quiz to help a student study "${topic}".`,
+    `Make exactly ${count} questions. Each has 4 plausible options and exactly one correct answer.`,
+    '',
+    'Respond ONLY with JSON, no prose:',
+    '[{"q":string,"options":[string,string,string,string],"answerIndex":number}]  (answerIndex 0-3)',
+  ].join('\n');
+}
+
+export function parseQuiz(raw: string): QuizQuestion[] {
+  let data: unknown;
+  try {
+    data = JSON.parse(stripJsonFences(raw));
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(data)) return [];
+  const out: QuizQuestion[] = [];
+  for (const item of data) {
+    if (typeof item !== 'object' || item === null) continue;
+    const o = item as Record<string, unknown>;
+    const q = typeof o.q === 'string' ? o.q.trim() : '';
+    const options = Array.isArray(o.options)
+      ? o.options.filter((x): x is string => typeof x === 'string').map((s) => s.trim()).slice(0, 4)
+      : [];
+    const ai = Number(o.answerIndex);
+    if (q && options.length >= 2 && Number.isFinite(ai)) {
+      out.push({
+        q: q.slice(0, 300),
+        options,
+        answerIndex: Math.min(Math.max(0, Math.round(ai)), options.length - 1),
+      });
+    }
+    if (out.length >= 20) break;
+  }
+  return out;
+}
+
+export async function generateQuiz(
+  topic: string,
+  count: number,
+  difficulty: string,
+): Promise<{ questions: QuizQuestion[] }> {
+  try {
+    const raw = await generateText(buildQuizPrompt(topic, count, difficulty), {
+      json: true,
+      maxOutputTokens: 1500,
+      feature: 'quiz',
+    });
+    return { questions: parseQuiz(raw) };
+  } catch (err) {
+    logFailure('quiz', err);
     return { questions: [] };
   }
 }
@@ -451,4 +596,18 @@ function stripJsonFences(text: string): string {
 function logFailure(feature: string, err: unknown): void {
   // eslint-disable-next-line no-console
   console.warn(`[taskko][gemini][${feature}] falling back:`, (err as Error)?.message ?? err);
+}
+
+/** Fire-and-forget usage log to Firestore `aiLogs` for the admin AI Insights view (FR-11.6). */
+function logUsage(feature: string, fallback: boolean, latencyMs: number): void {
+  try {
+    void adminDb().collection('aiLogs').add({
+      feature,
+      fallback,
+      latencyMs,
+      ts: FieldValue.serverTimestamp(),
+    });
+  } catch (_) {
+    // ignore logging failures
+  }
 }

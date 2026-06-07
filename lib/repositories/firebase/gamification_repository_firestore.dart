@@ -20,6 +20,19 @@ class GamificationRepositoryFirestore implements GamificationRepository {
 
   String get _uid => _auth.currentUser!.uid;
   DocumentReference<Map<String, dynamic>> get _doc => _db.collection('users').doc(_uid);
+  DocumentReference<Map<String, dynamic>> get _publicDoc =>
+      _db.collection('public_profiles').doc(_uid);
+
+  /// Mirror a public, leaderboard-readable copy of the profile (M14).
+  /// Fire-and-forget so it never blocks the UI path.
+  void _mirrorPublic(AppUser u) {
+    _publicDoc.set({
+      'name': u.name,
+      'points': u.points,
+      'rank': u.rank.label,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
 
   static String _dateKey(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -57,16 +70,22 @@ class GamificationRepositoryFirestore implements GamificationRepository {
         'createdAt': FieldValue.serverTimestamp(),
         'lastActiveDate': null,
       });
-      return AppUser(id: user.uid, name: name, email: user.email ?? '');
+      final created = AppUser(id: user.uid, name: name, email: user.email ?? '');
+      _mirrorPublic(created);
+      return created;
     }
-    return _fromDoc(user.uid, snap.data()!);
+    final loaded = _fromDoc(user.uid, snap.data()!);
+    _mirrorPublic(loaded);
+    return loaded;
   }
 
   @override
   Future<AppUser> setMood(Mood mood) async {
     await _doc.set({'mood': mood.name}, SetOptions(merge: true));
     final snap = await _doc.get();
-    return _fromDoc(_uid, snap.data() ?? const {});
+    final u = _fromDoc(_uid, snap.data() ?? const {});
+    _mirrorPublic(u);
+    return u;
   }
 
   @override
@@ -93,7 +112,9 @@ class GamificationRepositoryFirestore implements GamificationRepository {
           SetOptions(merge: true));
       return d;
     });
-    return _fromDoc(_uid, updated);
+    final u = _fromDoc(_uid, updated);
+    _mirrorPublic(u);
+    return u;
   }
 
   @override
@@ -115,10 +136,23 @@ class GamificationRepositoryFirestore implements GamificationRepository {
 
   @override
   Future<List<LeaderboardEntry>> leaderboard() async {
-    // Security rules restrict cross-user reads, so for now the leaderboard shows
-    // the real signed-in user. A public-profiles/squad model comes in a later phase.
-    final p = await profile();
-    return [LeaderboardEntry(position: 1, name: p.name, points: p.points, isYou: true)];
+    final me = _auth.currentUser?.uid;
+    final q = await _db
+        .collection('public_profiles')
+        .orderBy('points', descending: true)
+        .limit(20)
+        .get();
+    var pos = 0;
+    return q.docs.map((doc) {
+      pos++;
+      final d = doc.data();
+      return LeaderboardEntry(
+        position: pos,
+        name: (d['name'] as String?) ?? 'Student',
+        points: (d['points'] as num?)?.toInt() ?? 0,
+        isYou: doc.id == me,
+      );
+    }).toList();
   }
 
   @override

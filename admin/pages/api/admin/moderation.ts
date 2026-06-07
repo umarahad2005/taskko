@@ -1,50 +1,46 @@
 /**
- * /api/admin/moderation — moderation queue (FR-11.5). Admin-only (FR-11.9).
+ * /api/admin/moderation — real moderation queue (FR-11.5). Admin-only.
+ * Backed by the Firestore `moderation` collection (empty until reports exist).
  *
  * GET  ?severity=all|low|medium|high → { items: ModerationItem[] }
- * POST body: { itemId: string, action: 'dismiss'|'warn'|'suspend' } → { item }
- *
- * Errors: 400, 401, 403, 500 { error, retryable }
- * TODO(M9): back with the real `moderation/{id}` Firestore collection.
+ * POST { itemId, action: 'dismiss'|'warn'|'suspend' } → { item }
  */
 import type { NextApiResponse } from 'next';
 import { withAdmin, type AuthedRequest } from '../../../lib/auth';
 import { methodGuard, sendError, sendJson } from '../../../lib/http';
+import { adminDb } from '../../../lib/firebaseAdmin';
 
-interface ModerationItem {
-  id: string;
-  targetUser: string;
-  reason: string;
-  severity: 'low' | 'medium' | 'high';
-  status: 'open' | 'dismissed' | 'warned' | 'suspended';
-  createdAt: string;
-}
-
-const QUEUE: ModerationItem[] = [
-  { id: 'm1', targetUser: 'zara@uni.edu', reason: 'Reported squad message', severity: 'low', status: 'open', createdAt: '2026-06-05T08:10:00Z' },
-  { id: 'm2', targetUser: 'guest_882', reason: 'Spam goal submissions', severity: 'medium', status: 'open', createdAt: '2026-06-05T07:42:00Z' },
-  { id: 'm3', targetUser: 'bilal@uni.edu', reason: 'Abusive language flagged by AI', severity: 'high', status: 'open', createdAt: '2026-06-04T21:05:00Z' },
-];
-
-const ACTIONS: Record<string, ModerationItem['status']> = {
-  dismiss: 'dismissed',
-  warn: 'warned',
-  suspend: 'suspended',
-};
+const ACTIONS: Record<string, string> = { dismiss: 'dismissed', warn: 'warned', suspend: 'suspended' };
 
 export default withAdmin(async (req: AuthedRequest, res: NextApiResponse) => {
   if (!methodGuard(req, res, ['GET', 'POST'])) return;
+  const col = adminDb().collection('moderation');
 
   if (req.method === 'GET') {
     const severity = String(req.query.severity ?? 'all').toLowerCase();
-    const items = severity === 'all' ? QUEUE : QUEUE.filter((i) => i.severity === severity);
-    return sendJson(res, { items, stub: true });
+    const snap = await col.limit(100).get();
+    let items = snap.docs.map((d) => {
+      const x = d.data();
+      const ts = x.createdAt;
+      return {
+        id: d.id,
+        targetUser: (x.targetUser as string) ?? '',
+        reason: (x.reason as string) ?? '',
+        severity: (x.severity as string) ?? 'low',
+        status: (x.status as string) ?? 'open',
+        createdAt: ts && typeof ts.toDate === 'function' ? ts.toDate().toISOString() : null,
+      };
+    });
+    if (severity !== 'all') items = items.filter((i) => i.severity === severity);
+    items.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
+    return sendJson(res, { items });
   }
 
   const { itemId, action } = (req.body ?? {}) as { itemId?: string; action?: string };
   if (!itemId || !action || !(action in ACTIONS)) {
     return sendError(res, 400, 'Provide itemId and a valid action', false);
   }
-  const base = QUEUE.find((i) => i.id === itemId) ?? QUEUE[0];
-  sendJson(res, { item: { ...base, status: ACTIONS[action] }, stub: true });
+  await col.doc(itemId).set({ status: ACTIONS[action] }, { merge: true });
+  const d = await col.doc(itemId).get();
+  sendJson(res, { item: { id: d.id, ...d.data() } });
 });

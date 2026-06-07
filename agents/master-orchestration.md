@@ -121,7 +121,13 @@ Post-MVP, all free (monetization deferred). Sprint 1 (app-only): **M10 Reminders
 - **M10 Scheduled reminders ✔** — `services/notification_service.dart` (zonedSchedule + timezone), `repositories/settings_repository*` (Firestore prefs at `users/{uid}/settings/reminders`), `features/settings` (cubit+screen), opened from Profile. Android needed **core library desugaring** (`isCoreLibraryDesugaringEnabled=true` + `desugar_jdk_libs:2.1.4` in `android/app/build.gradle.kts`) for flutter_local_notifications.
 - **M11 History/stats ✔** — `models/focus_session.dart`, `repositories/session_repository*`, `features/history` (cubit + screen, dependency-free 7-day bar chart). Focus completion logs a session.
 - **M12 Reflection ✔** — 😫/😐/😀 rating at focus-session end, stored on the session.
-- **Sprint 1 complete (M10–M12).** Next: Sprint 2 = M13 (AI plan-day+quiz, needs backend redeploy) + M16 (real admin data).
+- **Sprint 1 complete (M10–M12).**
+- **M13 ✔** — AI quiz (`features/quiz`) + plan-my-day (`features/planday`); backend `/api/ai/quiz` + `/api/ai/plan-day`; `AiToolsRepository` (http+mock). Home has "Plan my day" + "Quiz me".
+- **M16 ✔** — `admin/pages/api/admin/*` rewritten to real Auth/Firestore data (no stubs) + AI usage logging to `aiLogs` (gemini.ts). Same response shapes → admin UI unchanged.
+- **Sprint 2 complete (M13+M16).** Both change the backend → **push to GitHub → Vercel redeploy** to go live.
+- **M14 ✔** — real squad leaderboard: `public_profiles` collection (rules deployed); `GamificationRepositoryFirestore` mirrors public copy + `leaderboard()` queries it (top 20, "you" highlighted).
+- **M15 (mostly) ✔** — Firestore offline persistence (main.dart), CI (`.github/workflows/ci.yml`), release signing (key.properties→debug fallback in `android/app/build.gradle.kts`, verified by APK build). DEFERRED: Crashlytics + Analytics (need native gradle plugin + device build verify).
+- **Sprint 3 ~done** (M14 + M15 minus Crashlytics/Analytics). M17 monetization deferred (post-funding).
 
 ## 7. Escalation triggers (ask the user, don't assume)
 - Firebase project / Gemini key / Vercel account access or quotas.

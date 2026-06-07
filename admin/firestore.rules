@@ -47,6 +47,13 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // Public leaderboard profiles (M14): any signed-in user may read; only the
+    // owner (or an admin) may write their own. No private fields stored here.
+    match /public_profiles/{uid} {
+      allow read: if isSignedIn();
+      allow write: if isOwner(uid) || isAdmin();
+    }
+
     // Everything else is denied by default.
     match /{document=**} {
       allow read, write: if false;

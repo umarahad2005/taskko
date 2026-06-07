@@ -56,6 +56,10 @@ node_modules/
 *serviceAccount*.json
 *.pem
 *.key
+key.properties
+**/key.properties
+*.jks
+*.keystore
 
 # Android module build output
 /android/build/

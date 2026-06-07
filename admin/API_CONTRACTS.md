@@ -22,6 +22,8 @@ Base URL in production = the Vercel deployment origin (e.g. `https://taskko.verc
 | POST | `/api/ai/chat` | `{ message: string, context?: UserContext }` | `{ reply: string, fallback: bool }` | FR-7.2 |
 | POST | `/api/ai/nudge` | `{ context?: UserContext }` | `{ nudge: {text, actions:[{label,action}]}, fallback: bool }` | FR-7.5 |
 | POST | `/api/ai/mood-session` | `{ mood: string, context?: UserContext }` | `{ session: {suggestedMinutes,taskCount,tone,message}, fallback: bool }` | FR-9.1 |
+| POST | `/api/ai/plan-day` | `{ tasks:[{title,minutes}], availableMinutes, mood }` | `{ blocks:[{start,end,taskTitle}] }` | M13 |
+| POST | `/api/ai/quiz` | `{ topic, count?, difficulty? }` | `{ questions:[{q,options[],answerIndex}] }` | M13 |
 
 `UserContext = { name?, rank?, points?, streakDays?, shields?, mood?, pendingTasks?[] }`
 

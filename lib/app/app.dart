@@ -3,10 +3,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../cubits/auth/auth_cubit.dart';
 import '../cubits/gamification/gamification_cubit.dart';
+import '../repositories/ai_tools_repository.dart';
 import '../repositories/auth_repository.dart';
 import '../repositories/chat_repository.dart';
 import '../repositories/gamification_repository.dart';
 import '../repositories/backend/ai_api_client.dart';
+import '../repositories/backend/ai_tools_repository_http.dart';
 import '../repositories/backend/chat_repository_http.dart';
 import '../repositories/backend/plan_repository_http.dart';
 import '../repositories/firebase/auth_repository_firebase.dart';
@@ -18,6 +20,7 @@ import '../repositories/mock/auth_repository_mock.dart';
 import '../repositories/mock/chat_repository_mock.dart';
 import '../repositories/mock/gamification_repository_mock.dart';
 import '../repositories/mock/plan_repository_mock.dart';
+import '../repositories/mock/ai_tools_repository_mock.dart';
 import '../repositories/mock/session_repository_mock.dart';
 import '../repositories/mock/settings_repository_mock.dart';
 import '../repositories/mock/tasks_repository_mock.dart';
@@ -67,6 +70,9 @@ class TaskkoApp extends StatelessWidget {
         ),
         RepositoryProvider<SessionRepository>(
           create: (_) => useFirebase ? SessionRepositoryFirestore() : SessionRepositoryMock(),
+        ),
+        RepositoryProvider<AiToolsRepository>(
+          create: (_) => useBackend ? AiToolsRepositoryHttp(AiApiClient()) : AiToolsRepositoryMock(),
         ),
       ],
       child: MultiBlocProvider(
