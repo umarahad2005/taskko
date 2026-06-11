@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../models/app_user.dart';
 import '../auth_repository.dart';
@@ -13,6 +14,18 @@ class FirebaseAuthRepository implements AuthRepository {
   FirebaseAuthRepository({FirebaseAuth? auth}) : _auth = auth ?? FirebaseAuth.instance;
 
   final FirebaseAuth _auth;
+
+  /// The Firebase **web** OAuth client id (from google-services.json, client_type 3).
+  /// Required on Android so google_sign_in returns an id-token Firebase accepts.
+  static const _webClientId =
+      '260736761827-qap6159ljmthqe791sh03gqvkh1hf9uf.apps.googleusercontent.com';
+  bool _googleReady = false;
+
+  /// Firebase persists the session on disk, so this stream fires the cached user
+  /// on cold start — the app stays logged in until an explicit sign-out.
+  @override
+  Stream<AppUser?> authStateChanges() =>
+      _auth.authStateChanges().asyncMap((user) => user == null ? null : _toAppUser(user));
 
   Future<AppUser> _toAppUser(User user) async {
     final token = await user.getIdTokenResult();
@@ -41,9 +54,30 @@ class FirebaseAuthRepository implements AuthRepository {
 
   @override
   Future<AppUser> signInWithGoogle() async {
-    // Native provider flow (uses the OAuth client created when the SHA-1 was
-    // added in Firebase). No google_sign_in package needed.
-    final cred = await _auth.signInWithProvider(GoogleAuthProvider());
+    // Native Google account picker (google_sign_in 7) → exchange the id-token
+    // for a Firebase credential. Far more reliable than the web/Custom-Tab
+    // signInWithProvider redirect, which errored right after account selection.
+    final google = GoogleSignIn.instance;
+    if (!_googleReady) {
+      await google.initialize(serverClientId: _webClientId);
+      _googleReady = true;
+    }
+
+    final GoogleSignInAccount account;
+    try {
+      account = await google.authenticate(scopeHint: const ['email']);
+    } on GoogleSignInException catch (e) {
+      if (e.code == GoogleSignInExceptionCode.canceled) {
+        throw const AuthCancelledException();
+      }
+      rethrow;
+    }
+
+    final idToken = account.authentication.idToken;
+    if (idToken == null) {
+      throw FirebaseAuthException(code: 'missing-google-id-token');
+    }
+    final cred = await _auth.signInWithCredential(GoogleAuthProvider.credential(idToken: idToken));
     return _toAppUser(cred.user!);
   }
 
@@ -51,5 +85,11 @@ class FirebaseAuthRepository implements AuthRepository {
   Future<void> sendPasswordReset(String email) => _auth.sendPasswordResetEmail(email: email.trim());
 
   @override
-  Future<void> signOut() => _auth.signOut();
+  Future<void> signOut() async {
+    // Sign out of Google too so the picker reappears on the next login.
+    try {
+      await GoogleSignIn.instance.signOut();
+    } catch (_) {}
+    await _auth.signOut();
+  }
 }

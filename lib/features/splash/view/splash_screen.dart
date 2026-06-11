@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../cubits/auth/auth_cubit.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_typography.dart';
 import '../../../widgets/taskko_logo.dart';
 
-/// Splash (SRS FR-1) — deep-navy brand moment. Auto-advances to onboarding
-/// after ~2.4s. Real auth-state routing (returning user → Home) lands in M3+.
+/// Splash (SRS FR-1) — deep-navy brand moment. After the brand beat it restores
+/// any persisted session: signed-in users skip straight to Home/Admin, everyone
+/// else continues to onboarding.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -18,9 +21,27 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    Future<void>.delayed(const Duration(milliseconds: 2400), () {
-      if (mounted) context.go('/onboarding');
-    });
+    _route();
+  }
+
+  Future<void> _route() async {
+    await Future<void>.delayed(const Duration(milliseconds: 2400));
+    if (!mounted) return;
+    final auth = context.read<AuthCubit>();
+    // Wait for the persisted-session check to resolve (falls back to signed-out).
+    var state = auth.state;
+    if (state.status == AuthStatus.unknown) {
+      state = await auth.stream.firstWhere((s) => s.status != AuthStatus.unknown).timeout(
+            const Duration(seconds: 3),
+            onTimeout: () => const AuthState(status: AuthStatus.unauthenticated),
+          );
+    }
+    if (!mounted) return;
+    if (state.status == AuthStatus.authenticated) {
+      context.go(state.isAdmin ? '/admin' : '/home');
+    } else {
+      context.go('/onboarding');
+    }
   }
 
   @override
