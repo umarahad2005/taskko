@@ -52,7 +52,16 @@ class _PlanBodyState extends State<_PlanBody> {
         if (state.committed) {
           ScaffoldMessenger.of(context)
             ..hideCurrentSnackBar()
-            ..showSnackBar(SnackBar(content: Text('Added ${state.tasks.length} tasks to today 🎉')));
+            ..showSnackBar(SnackBar(
+              duration: const Duration(seconds: 2),
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded, color: AppColors.mint, size: 20),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(child: Text('Added ${state.tasks.length} tasks to today 🎉')),
+                ],
+              ),
+            ));
           context.go('/home');
         }
       },

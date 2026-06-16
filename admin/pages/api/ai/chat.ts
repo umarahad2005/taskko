@@ -16,6 +16,9 @@ import { withAuth, type AuthedRequest } from '../../../lib/auth';
 import { methodGuard, sendError, sendJson } from '../../../lib/http';
 import { generateChatReply, loadUserContext, type UserContext } from '../../../lib/gemini';
 
+// Allow up to 60s on Vercel — Gemini 3.x thinking can exceed the default timeout.
+export const config = { maxDuration: 60 };
+
 export default withAuth(async (req: AuthedRequest, res: NextApiResponse) => {
   if (!methodGuard(req, res, ['POST'])) return;
 

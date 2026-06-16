@@ -12,6 +12,16 @@ abstract interface class AuthRepository {
   Future<AppUser> signInWithGoogle();
   Future<void> sendPasswordReset(String email);
   Future<void> signOut();
+
+  /// Change the account email (re-authenticates with [currentPassword] first).
+  /// Sends a verification link to [newEmail]; the change applies once confirmed.
+  Future<void> updateEmail({required String newEmail, required String currentPassword});
+
+  /// Change the account password (re-authenticates with [currentPassword] first).
+  Future<void> updatePassword({required String newPassword, required String currentPassword});
+
+  /// Permanently delete the signed-in account (re-authenticates first).
+  Future<void> deleteAccount({required String currentPassword});
 }
 
 /// Thrown when the user dismisses a provider sheet (e.g. closes the Google

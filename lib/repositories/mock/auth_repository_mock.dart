@@ -61,6 +61,22 @@ class AuthRepositoryMock implements AuthRepository {
     _emit(null);
   }
 
+  @override
+  Future<void> updateEmail({required String newEmail, required String currentPassword}) async {
+    await Future<void>.delayed(_latency);
+  }
+
+  @override
+  Future<void> updatePassword({required String newPassword, required String currentPassword}) async {
+    await Future<void>.delayed(_latency);
+  }
+
+  @override
+  Future<void> deleteAccount({required String currentPassword}) async {
+    await Future<void>.delayed(_latency);
+    _emit(null);
+  }
+
   AppUser _userFor(String email) =>
       email.trim().toLowerCase() == Seed.admin.email ? Seed.admin : Seed.user;
 }

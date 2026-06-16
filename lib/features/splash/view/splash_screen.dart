@@ -17,11 +17,19 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMixin {
   late final AnimationController _c = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1200),
   )..forward();
+
+  // Continuous gentle up/down wave so the brand mark feels alive (loops forever).
+  late final AnimationController _float = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2600),
+  )..repeat(reverse: true);
+  late final Animation<double> _bob = Tween<double>(begin: -7, end: 7)
+      .animate(CurvedAnimation(parent: _float, curve: Curves.easeInOut));
 
   late final Animation<double> _logoScale = CurvedAnimation(
     parent: _c,
@@ -57,6 +65,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   void dispose() {
     _c.dispose();
+    _float.dispose();
     super.dispose();
   }
 
@@ -106,7 +115,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
               ),
             ),
             Center(
-              child: Column(
+              child: AnimatedBuilder(
+                animation: _bob,
+                builder: (context, child) => Transform.translate(offset: Offset(0, _bob.value), child: child),
+                child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   FadeTransition(
@@ -147,6 +159,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                     ),
                   ),
                 ],
+                ),
               ),
             ),
             // Loading affordance.

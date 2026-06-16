@@ -92,14 +92,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   LabeledField(
                     label: 'Name',
                     controller: _name,
-                    hint: 'Sara Khan',
+                    hint: 'Umar Ahad Usmani',
                     onChanged: (_) => setState(() {}),
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   LabeledField(
                     label: 'Email',
                     controller: _email,
-                    hint: 'sara@uni.edu',
+                    hint: 'umar@uni.edu',
                     keyboardType: TextInputType.emailAddress,
                     errorText: emailErr,
                     onChanged: (_) => setState(() {}),

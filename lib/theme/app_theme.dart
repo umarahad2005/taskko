@@ -32,6 +32,17 @@ abstract final class AppTheme {
           TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
         },
       ),
+      // Floating, rounded, branded snackbars (instead of the default square bar
+      // that hugged the bottom edge) — they slide/fade in above the nav bar.
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.ink,
+        contentTextStyle: AppTypography.ui(14, color: Colors.white, weight: FontWeight.w600),
+        actionTextColor: AppColors.primary,
+        shape: RoundedRectangleBorder(borderRadius: AppRadii.lgRadius),
+        elevation: 8,
+        insetPadding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
+      ),
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,

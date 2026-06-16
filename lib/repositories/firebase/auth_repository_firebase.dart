@@ -99,4 +99,74 @@ class FirebaseAuthRepository implements AuthRepository {
     } catch (_) {}
     await _auth.signOut();
   }
+
+  /// Re-authenticate with the account password — required by Firebase before
+  /// sensitive changes (email/password/delete) when the session isn't fresh.
+  Future<User> _reauth(String currentPassword) async {
+    final user = _auth.currentUser;
+    if (user == null) throw const AuthException('You are not signed in.');
+    final email = user.email;
+    if (email == null || email.isEmpty) {
+      throw const AuthException('This account has no password sign-in to confirm with.');
+    }
+    try {
+      await user.reauthenticateWithCredential(
+        EmailAuthProvider.credential(email: email, password: currentPassword),
+      );
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(_friendly(e));
+    }
+    return user;
+  }
+
+  @override
+  Future<void> updateEmail({required String newEmail, required String currentPassword}) async {
+    final user = await _reauth(currentPassword);
+    try {
+      // Firebase 6.x: sends a verification link to the new address; the email
+      // changes only after the user confirms it (more secure than updateEmail).
+      await user.verifyBeforeUpdateEmail(newEmail.trim());
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(_friendly(e));
+    }
+  }
+
+  @override
+  Future<void> updatePassword({required String newPassword, required String currentPassword}) async {
+    final user = await _reauth(currentPassword);
+    try {
+      await user.updatePassword(newPassword);
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(_friendly(e));
+    }
+  }
+
+  @override
+  Future<void> deleteAccount({required String currentPassword}) async {
+    final user = await _reauth(currentPassword);
+    try {
+      await user.delete();
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(_friendly(e));
+    }
+  }
+
+  /// Map common Firebase auth error codes to clear, user-facing messages.
+  String _friendly(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'wrong-password':
+      case 'invalid-credential':
+        return 'Current password is incorrect.';
+      case 'weak-password':
+        return 'New password is too weak (use at least 6 characters).';
+      case 'email-already-in-use':
+        return 'That email is already in use by another account.';
+      case 'invalid-email':
+        return 'That email address looks invalid.';
+      case 'requires-recent-login':
+        return 'Please sign out and back in, then try again.';
+      default:
+        return e.message ?? 'Something went wrong. Please try again.';
+    }
+  }
 }

@@ -28,24 +28,37 @@ import { adminDb } from './firebaseAdmin';
  * transparently falls back to the matching stable 2.5 model, and only then to
  * the deterministic per-feature fallback — so the AI features never hard-fail.
  */
-const MODEL_PRO = process.env.GEMINI_MODEL_PRO ?? 'gemini-3.1-pro';
+// Verified against the project's Gemini key (2026-06): `gemini-3.5-flash` and
+// `gemini-2.5-flash` return 200, while `gemini-3.1-pro` is 404 and
+// `gemini-2.5-pro` is 429 on this plan. So every tier uses 3.5-flash (frontier,
+// strong at agentic/structured work) with a 2.5-flash fallback. All env-overridable.
+const MODEL_PRO = process.env.GEMINI_MODEL_PRO ?? 'gemini-3.5-flash';
 const MODEL_FLASH = process.env.GEMINI_MODEL ?? 'gemini-3.5-flash';
-const FALLBACK_PRO = process.env.GEMINI_FALLBACK_PRO ?? 'gemini-2.5-pro';
+const FALLBACK_PRO = process.env.GEMINI_FALLBACK_PRO ?? 'gemini-2.5-flash';
 const FALLBACK_FLASH = process.env.GEMINI_FALLBACK_FLASH ?? 'gemini-2.5-flash';
 
 /** Convenience model selectors spread into generateText options. */
 const PRO = { model: MODEL_PRO, fallbackModel: FALLBACK_PRO } as const;
 const FLASH = { model: MODEL_FLASH, fallbackModel: FALLBACK_FLASH } as const;
 
-// Bound Gemini work to stay under the Vercel function limit (NFR-1, §9 risk).
-// Pro reasoning is slower than flash, so allow a little more headroom.
-const GEMINI_TIMEOUT_MS = 28_000;
+// Gemini 3.x "flash" models *think* before answering, and the thinking tokens
+// share the output budget — so a low maxOutputTokens truncates the visible reply
+// mid-sentence. We give every call generous headroom (see per-feature values).
+// Timeout stays under the Vercel function maxDuration (60s — see route configs).
+const GEMINI_TIMEOUT_MS = 50_000;
 
 /** Build a LangChain chat model for a given Gemini model id. */
-function makeModel(model: string, maxOutputTokens: number, temperature: number): ChatGoogleGenerativeAI {
+function makeModel(
+  model: string,
+  maxOutputTokens: number,
+  temperature: number,
+  json: boolean,
+): ChatGoogleGenerativeAI {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY is not set.');
-  return new ChatGoogleGenerativeAI({ apiKey, model, maxOutputTokens, temperature, maxRetries: 1 });
+  // `json: true` sets responseMimeType=application/json so structured features
+  // reliably parse even when the model would otherwise add prose/fences.
+  return new ChatGoogleGenerativeAI({ apiKey, model, maxOutputTokens, temperature, maxRetries: 1, json });
 }
 
 /** Thrown when Gemini fails and the caller should return a retryable fallback. */
@@ -122,8 +135,9 @@ async function invokeModel(
   messages: (SystemMessage | HumanMessage)[],
   maxOutputTokens: number,
   temperature: number,
+  json: boolean,
 ): Promise<string> {
-  const model = makeModel(modelId, maxOutputTokens, temperature);
+  const model = makeModel(modelId, maxOutputTokens, temperature, json);
   const timeout = new Promise<never>((_, reject) =>
     setTimeout(() => reject(new GeminiError('Gemini request timed out')), GEMINI_TIMEOUT_MS),
   );
@@ -146,25 +160,27 @@ async function invokeModel(
 async function generateText(prompt: string, opts?: GenerateOpts): Promise<string> {
   const primary = opts?.model ?? MODEL_FLASH;
   const fallback = opts?.fallbackModel;
-  const maxOutputTokens = opts?.maxOutputTokens ?? 1024;
+  // Generous default so thinking tokens never starve the visible answer.
+  const maxOutputTokens = opts?.maxOutputTokens ?? 2048;
   const temperature = opts?.temperature ?? (opts?.json ? 0.4 : 0.7);
+  const json = opts?.json ?? false;
   const feature = opts?.feature ?? 'unknown';
   const system = opts?.system ?? TAKO_PERSONA;
   const messages: (SystemMessage | HumanMessage)[] = [
-    new SystemMessage(opts?.json ? `${system}\nRespond with raw JSON only — no markdown, no commentary.` : system),
+    new SystemMessage(json ? `${system}\nRespond with raw JSON only — no markdown, no commentary.` : system),
     new HumanMessage(prompt),
   ];
 
   const started = Date.now();
   try {
-    const text = await invokeModel(primary, messages, maxOutputTokens, temperature);
+    const text = await invokeModel(primary, messages, maxOutputTokens, temperature, json);
     logUsage(feature, false, Date.now() - started);
     return text;
   } catch (primaryErr) {
     // Frontier model unavailable / transient error → try the stable fallback once.
     if (fallback && fallback !== primary) {
       try {
-        const text = await invokeModel(fallback, messages, maxOutputTokens, temperature);
+        const text = await invokeModel(fallback, messages, maxOutputTokens, temperature, json);
         logUsage(feature, false, Date.now() - started);
         return text;
       } catch {
@@ -215,12 +231,18 @@ export function buildBreakdownPrompt(goal: string, availableMinutes?: number): s
     '',
     'Produce an ordered, realistic breakdown of small, concrete, actionable steps:',
     '- Each step is a single sitting the student can actually start and finish.',
-    '- Titles are specific and action-first (e.g. "Summarise Ch.3: process scheduling"),',
-    '  not vague ("study", "review notes"). Reference the real subject/topic when known.',
+    '- Titles MUST be specific, action-first, and reference the real subject/subtopics —',
+    '  NEVER generic placeholders like "Outline what X needs", "Do the most important part",',
+    '  or "Review and wrap up". Name the actual content.',
+    '  Example — goal "viva of MAD in Flutter on state management", 3 steps →',
+    '    ["Study the state-management overview: what it is and why it is needed",',
+    '     "Compare the main approaches: setState, Provider/Riverpod, Bloc, GetX",',
+    '     "Revise every topic and self-test with quick Q&A"]. Mirror that specificity.',
+    '- If the Details specify a NUMBER of steps/tasks, produce EXACTLY that many.',
+    '  Otherwise use 3–8 steps and match the scope.',
     '- Order the steps the way you would actually do them (gather → learn → practise → review).',
     '- minutes: a realistic whole-number estimate (5–90) per step.',
     '- points: 5–50 reflecting the effort/difficulty of that step.',
-    '- Use 3–8 steps; fewer for small goals, more for larger ones — match the scope.',
     '',
     'Respond with ONLY a JSON array in this exact shape (no prose, no markdown fences):',
     '[{"title": string, "minutes": number, "points": number}]',
@@ -263,10 +285,12 @@ export function parseBreakdown(raw: string): PlanTask[] {
 export function fallbackBreakdown(goal: string, availableMinutes?: number): PlanTask[] {
   const total = availableMinutes && availableMinutes > 0 ? availableMinutes : 60;
   const slice = Math.max(15, Math.round(total / 3));
+  // No AI available — still reference the actual goal instead of generic placeholders.
+  const g = goal.replace(/\s+/g, ' ').replace(/\n?Details:.*/s, '').trim().slice(0, 80);
   return [
-    { title: `Outline what "${goal}" needs`.slice(0, 140), minutes: slice, points: 15 },
-    { title: 'Do the most important part first', minutes: slice, points: 20 },
-    { title: 'Review and wrap up', minutes: Math.max(10, total - slice * 2), points: 10 },
+    { title: `Gather notes & resources for: ${g}`.slice(0, 140), minutes: slice, points: 15 },
+    { title: `Work through the core of: ${g}`.slice(0, 140), minutes: slice, points: 20 },
+    { title: `Review & self-test: ${g}`.slice(0, 140), minutes: Math.max(10, total - slice * 2), points: 10 },
   ];
 }
 
@@ -279,7 +303,7 @@ export async function generateBreakdown(
       ...PRO,
       json: true,
       temperature: 0.4,
-      maxOutputTokens: 1200,
+      maxOutputTokens: 6000,
       feature: 'breakdown',
     });
     return { tasks: parseBreakdown(raw), fallback: false };
@@ -303,7 +327,7 @@ export async function regenerateBreakdown(
     ? `\nProduce a DIFFERENT plan. Avoid repeating these previous tasks: ${avoid.join('; ')}.`
     : '\nProduce a fresh alternative plan with different phrasing and structure.';
   try {
-    const raw = await generateText(base + avoidNote, { ...PRO, json: true, temperature: 0.6, maxOutputTokens: 1200, feature: 'regenerate' });
+    const raw = await generateText(base + avoidNote, { ...PRO, json: true, temperature: 0.6, maxOutputTokens: 6000, feature: 'regenerate' });
     return { tasks: parseBreakdown(raw), fallback: false };
   } catch (err) {
     logFailure('regenerate', err);
@@ -379,7 +403,7 @@ export async function generateChatReply(
   ctx: UserContext,
 ): Promise<{ reply: string; fallback: boolean }> {
   try {
-    const raw = await generateText(buildChatPrompt(message, ctx), { ...FLASH, maxOutputTokens: 500, feature: 'chat' });
+    const raw = await generateText(buildChatPrompt(message, ctx), { ...FLASH, maxOutputTokens: 3000, feature: 'chat' });
     return { reply: raw.trim(), fallback: false };
   } catch (err) {
     logFailure('chat', err);
@@ -418,7 +442,7 @@ export async function generateNudge(
   ctx: UserContext,
 ): Promise<{ nudge: NudgeCard; fallback: boolean }> {
   try {
-    const raw = await generateText(buildNudgePrompt(ctx), { ...FLASH, maxOutputTokens: 200, feature: 'nudge' });
+    const raw = await generateText(buildNudgePrompt(ctx), { ...FLASH, maxOutputTokens: 1500, feature: 'nudge' });
     return { nudge: { text: raw.trim(), actions: NUDGE_ACTIONS }, fallback: false };
   } catch (err) {
     logFailure('nudge', err);
@@ -485,7 +509,7 @@ export async function generateMoodSession(
     const raw = await generateText(buildMoodSessionPrompt(mood, ctx), {
       ...FLASH,
       json: true,
-      maxOutputTokens: 300,
+      maxOutputTokens: 2000,
       feature: 'mood-session',
     });
     return { session: parseMoodSession(raw), fallback: false };
@@ -509,18 +533,18 @@ export function buildClarifyPrompt(goal: string): string {
   return [
     `A student wants help with this goal/task: "${goal}".`,
     '',
-    'Before building a plan, act like a thoughtful tutor and ask the 2–3 MOST useful',
-    'clarifying questions whose answers would most change the plan. Good things to clarify:',
-    'the exact subject/topic, the scope or syllabus range, the deadline / time available,',
-    'the format (e.g. quiz, notes, slides, code, presentation), the difficulty, and how many',
-    'items/steps they want.',
+    'Act like a thoughtful tutor: BEFORE planning, ask 2–3 short clarifying questions so the',
+    'plan fits exactly what they need. You MUST include both of these:',
+    '  1) a question pinning down the SPECIFIC topic / subtopics / scope, and',
+    '  2) a question asking HOW MANY steps (tasks) they want the goal broken into.',
+    'A third question is optional (deadline / time available / difficulty / format).',
     '',
     'Rules:',
-    '- Ask 2–3 questions unless the goal is already fully specified (then return []).',
-    '- Each question is short and concrete. Provide 2–4 quick-pick options that are realistic',
-    '  answers for THIS goal, not generic. e.g. for "how many" use ["3","5","10"];',
-    '  for difficulty use ["Easy","Medium","Hard"]; for a quiz topic, suggest likely topics.',
-    '- Never ask something already answered in the goal text.',
+    '- Each question is short and concrete, with 2–4 realistic tappable quick-pick options',
+    '  specific to THIS goal (not generic). Example: for a MAD/Flutter state-management viva,',
+    '  topic options could be ["Overview + why", "Provider/Riverpod", "Bloc", "GetX"].',
+    '- For the "how many steps" question use numeric options like ["3","5","7"].',
+    '- Only return [] if the goal ALREADY states both the exact scope AND the number of steps.',
     '',
     'Respond with ONLY a JSON array in this exact shape (no prose, no markdown fences):',
     '[{"question": string, "options": [string]}]',
@@ -552,7 +576,7 @@ export function parseClarify(raw: string): ClarifyQuestion[] {
 
 export async function generateClarify(goal: string): Promise<{ questions: ClarifyQuestion[] }> {
   try {
-    const raw = await generateText(buildClarifyPrompt(goal), { ...PRO, json: true, temperature: 0.5, maxOutputTokens: 500, feature: 'clarify' });
+    const raw = await generateText(buildClarifyPrompt(goal), { ...PRO, json: true, temperature: 0.5, maxOutputTokens: 3000, feature: 'clarify' });
     return { questions: parseClarify(raw) };
   } catch (err) {
     logFailure('clarify', err);
@@ -619,7 +643,7 @@ export async function generatePlanDay(
     const raw = await generateText(buildPlanDayPrompt(tasks, availableMinutes, mood), {
       ...FLASH,
       json: true,
-      maxOutputTokens: 700,
+      maxOutputTokens: 3000,
       feature: 'plan-day',
     });
     return { blocks: parsePlanDay(raw) };
@@ -690,7 +714,7 @@ export async function generateQuiz(
       ...PRO,
       json: true,
       temperature: 0.5,
-      maxOutputTokens: 1500,
+      maxOutputTokens: 8000,
       feature: 'quiz',
     });
     return { questions: parseQuiz(raw) };

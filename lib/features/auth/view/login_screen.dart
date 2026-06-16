@@ -23,7 +23,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _email = TextEditingController(text: 'sara@uni.edu');
+  final _email = TextEditingController(text: 'sharjeel@uni.edu');
   final _password = TextEditingController();
 
   @override
@@ -84,7 +84,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   LabeledField(
                     label: 'Email',
                     controller: _email,
-                    hint: 'sara@uni.edu',
+                    hint: 'sharjeel@uni.edu',
                     keyboardType: TextInputType.emailAddress,
                     errorText: emailErr,
                     onChanged: (_) => setState(() {}),

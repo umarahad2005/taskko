@@ -6,6 +6,7 @@ import '../cubits/gamification/gamification_cubit.dart';
 import '../repositories/admin_repository.dart';
 import '../repositories/ai_tools_repository.dart';
 import '../repositories/auth_repository.dart';
+import '../repositories/chat_history_repository.dart';
 import '../repositories/chat_repository.dart';
 import '../repositories/gamification_repository.dart';
 import '../repositories/backend/admin_api_client.dart';
@@ -15,11 +16,13 @@ import '../repositories/backend/ai_tools_repository_http.dart';
 import '../repositories/backend/chat_repository_http.dart';
 import '../repositories/backend/plan_repository_http.dart';
 import '../repositories/firebase/auth_repository_firebase.dart';
+import '../repositories/firebase/chat_history_repository_firestore.dart';
 import '../repositories/firebase/gamification_repository_firestore.dart';
 import '../repositories/firebase/session_repository_firestore.dart';
 import '../repositories/firebase/settings_repository_firestore.dart';
 import '../repositories/firebase/tasks_repository_firestore.dart';
 import '../repositories/mock/auth_repository_mock.dart';
+import '../repositories/mock/chat_history_repository_mock.dart';
 import '../repositories/mock/chat_repository_mock.dart';
 import '../repositories/mock/gamification_repository_mock.dart';
 import '../repositories/mock/plan_repository_mock.dart';
@@ -68,6 +71,9 @@ class TaskkoApp extends StatelessWidget {
         ),
         RepositoryProvider<ChatRepository>(
           create: (_) => useBackend ? ChatRepositoryHttp(AiApiClient()) : ChatRepositoryMock(),
+        ),
+        RepositoryProvider<ChatHistoryRepository>(
+          create: (_) => useFirebase ? ChatHistoryRepositoryFirestore() : ChatHistoryRepositoryMock(),
         ),
         RepositoryProvider<SettingsRepository>(
           create: (_) => useFirebase ? SettingsRepositoryFirestore() : SettingsRepositoryMock(),

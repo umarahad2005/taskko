@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../common/view_status.dart';
+import '../../../repositories/chat_history_repository.dart';
 import '../../../repositories/chat_repository.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_radii.dart';
@@ -18,7 +19,10 @@ class ChatScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (ctx) => ChatCubit(ctx.read<ChatRepository>())..load(),
+      create: (ctx) => ChatCubit(
+        ctx.read<ChatRepository>(),
+        history: ctx.read<ChatHistoryRepository>(),
+      )..load(),
       child: const TabScaffold(currentTab: TaskkoTab.tako, body: _ChatBody()),
     );
   }
@@ -121,8 +125,113 @@ class _ChatHeader extends StatelessWidget {
               ],
             ),
           ),
-          const Icon(Icons.more_horiz_rounded, color: AppColors.ink3),
+          IconButton(
+            tooltip: 'Chat history',
+            icon: const Icon(Icons.more_horiz_rounded, color: AppColors.ink3),
+            onPressed: () => _openHistory(context),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+/// Open the chat history menu: start a new chat or reopen a past session.
+void _openHistory(BuildContext context) {
+  final cubit = context.read<ChatCubit>();
+  cubit.refreshSessions();
+  showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    backgroundColor: AppColors.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadii.lg)),
+    ),
+    builder: (_) => BlocProvider<ChatCubit>.value(value: cubit, child: const _ChatHistorySheet()),
+  );
+}
+
+class _ChatHistorySheet extends StatelessWidget {
+  const _ChatHistorySheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final cubit = context.read<ChatCubit>();
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.gutter, 0, AppSpacing.gutter, AppSpacing.md),
+        child: BlocBuilder<ChatCubit, ChatState>(
+          builder: (context, state) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Text('Chats', style: AppTypography.ui(16, weight: FontWeight.w800)),
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: () {
+                        cubit.newChat();
+                        Navigator.of(context).pop();
+                      },
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                      label: const Text('New chat'),
+                    ),
+                  ],
+                ),
+                const Divider(height: 1),
+                if (state.sessions.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
+                    child: Text(
+                      'No past chats yet — start talking to Tako!',
+                      textAlign: TextAlign.center,
+                      style: AppTypography.ui(13, color: AppColors.ink3, weight: FontWeight.w500),
+                    ),
+                  )
+                else
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: state.sessions.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (context, i) {
+                        final s = state.sessions[i];
+                        final selected = s.id == state.currentSessionId;
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: CircleAvatar(
+                            radius: 16,
+                            backgroundColor: selected ? AppColors.primary : AppColors.primarySoft,
+                            child: Icon(Icons.chat_bubble_outline_rounded,
+                                size: 16, color: selected ? Colors.white : AppColors.primaryDeep),
+                          ),
+                          title: Text(s.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.ui(14, weight: FontWeight.w700)),
+                          subtitle: Text(s.preview,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.ui(12, color: AppColors.ink3)),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete_outline_rounded, size: 20, color: AppColors.ink4),
+                            onPressed: () => cubit.deleteSession(s.id),
+                          ),
+                          onTap: () {
+                            cubit.openSession(s.id);
+                            Navigator.of(context).pop();
+                          },
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
