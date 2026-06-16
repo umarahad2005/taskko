@@ -12,18 +12,40 @@ import '../../../widgets/bento_card.dart';
 import '../../../widgets/secondary_button.dart';
 
 /// User profile (SRS — opened from the Home avatar). Real data from Firestore.
-class ProfileScreen extends StatelessWidget {
+/// Stateful so it can re-fetch after the profile is edited (CRUD).
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
   @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  late GamificationRepository _repo;
+  late Future<AppUser> _future;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _repo = context.read<GamificationRepository>();
+    _future = _repo.profile();
+  }
+
+  void _refresh() => setState(() => _future = _repo.profile());
+
+  Future<void> _openEdit(AppUser user) async {
+    final updated = await context.push<AppUser>('/profile/edit', extra: user);
+    if (updated != null) _refresh();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final repo = context.read<GamificationRepository>();
     return Scaffold(
       body: DecoratedBox(
         decoration: const BoxDecoration(gradient: AppColors.bgGradient),
         child: SafeArea(
           child: FutureBuilder<AppUser>(
-            future: repo.profile(),
+            future: _future,
             builder: (context, snap) {
               if (snap.connectionState != ConnectionState.done) {
                 return const Center(child: CircularProgressIndicator());
@@ -42,6 +64,12 @@ class ProfileScreen extends StatelessWidget {
                         icon: const Icon(Icons.arrow_back_rounded, color: AppColors.ink),
                       ),
                       Text('Profile', style: AppTypography.ui(18, weight: FontWeight.w800)),
+                      const Spacer(),
+                      IconButton(
+                        tooltip: 'Edit profile',
+                        onPressed: () => _openEdit(user),
+                        icon: const Icon(Icons.edit_rounded, color: AppColors.primary),
+                      ),
                     ],
                   ),
                   const SizedBox(height: AppSpacing.lg),
@@ -80,6 +108,8 @@ class ProfileScreen extends StatelessWidget {
                     Expanded(child: _StatCard(label: 'Shields', value: '${user.shields}', color: AppColors.mint, mono: true)),
                   ]),
                   const SizedBox(height: AppSpacing.xl),
+                  SecondaryButton(label: 'Edit profile', onPressed: () => _openEdit(user), filled: true),
+                  const SizedBox(height: AppSpacing.md),
                   SecondaryButton(label: 'Session history', onPressed: () => context.push('/history')),
                   const SizedBox(height: AppSpacing.md),
                   SecondaryButton(label: 'Reminders & notifications', onPressed: () => context.push('/settings')),

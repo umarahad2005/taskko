@@ -13,6 +13,10 @@ abstract interface class GamificationRepository {
   /// Persist a mood check-in (FR-4.4 / FR-9) and return the updated profile.
   Future<AppUser> setMood(Mood mood);
 
+  /// Update editable profile fields (profile CRUD): display name and/or mood.
+  /// Null fields are left unchanged. Returns the updated profile.
+  Future<AppUser> updateProfile({String? name, Mood? mood});
+
   /// Apply a task completion/uncompletion: award/retract [points] and update
   /// the daily streak; returns the updated profile (FR-4.7 / FR-8).
   Future<AppUser> recordTaskCompletion({required int points, required bool nowDone});

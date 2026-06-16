@@ -14,11 +14,21 @@ class AuthCubit extends Cubit<AuthState> {
   AuthCubit(this._repo) : super(const AuthState()) {
     // Restore a persisted session on startup and follow every auth change so
     // the user stays logged in across restarts (like Instagram/Facebook).
-    _sub = _repo.authStateChanges().listen((user) {
-      emit(user == null
-          ? const AuthState(status: AuthStatus.unauthenticated)
-          : state.copyWith(status: AuthStatus.authenticated, user: user));
-    });
+    _sub = _repo.authStateChanges().listen(
+      (user) {
+        emit(user == null
+            ? const AuthState(status: AuthStatus.unauthenticated)
+            : state.copyWith(status: AuthStatus.authenticated, user: user));
+      },
+      onError: (Object _) {
+        // Build a fresh state (not copyWith) so the stale user is dropped:
+        // a failure status must never coexist with an authenticated user.
+        emit(const AuthState(
+          status: AuthStatus.failure,
+          error: 'Something went wrong. Please try again.',
+        ));
+      },
+    );
   }
 
   final AuthRepository _repo;
@@ -47,6 +57,9 @@ class AuthCubit extends Cubit<AuthState> {
     } on AuthCancelledException {
       // User dismissed the provider sheet — silently return to the form.
       emit(state.copyWith(status: AuthStatus.unauthenticated));
+    } on AuthException catch (e) {
+      // Known sign-in failure with a clear, user-facing message.
+      emit(state.copyWith(status: AuthStatus.failure, error: e.message));
     } catch (_) {
       emit(state.copyWith(status: AuthStatus.failure, error: 'Something went wrong. Please try again.'));
     }

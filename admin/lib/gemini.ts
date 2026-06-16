@@ -13,22 +13,39 @@
  * created in the GCP project taskko-498611 (so usage bills to your credits).
  * The key (GEMINI_API_KEY) is read from env only — never shipped to the client.
  */
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
+import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from './firebaseAdmin';
 
-const DEFAULT_MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash';
+/**
+ * Premium model tiers (overridable via env). We deliberately favour accuracy
+ * over cost (per product decision): the "pro" tier does the reasoning-heavy
+ * structured work (task breakdown, clarifying questions, quizzes) while the
+ * "flash" tier handles fast conversational replies (chat, nudges, mood).
+ *
+ * If a frontier model id is unavailable for the project/key, each call
+ * transparently falls back to the matching stable 2.5 model, and only then to
+ * the deterministic per-feature fallback — so the AI features never hard-fail.
+ */
+const MODEL_PRO = process.env.GEMINI_MODEL_PRO ?? 'gemini-3.1-pro';
+const MODEL_FLASH = process.env.GEMINI_MODEL ?? 'gemini-3.5-flash';
+const FALLBACK_PRO = process.env.GEMINI_FALLBACK_PRO ?? 'gemini-2.5-pro';
+const FALLBACK_FLASH = process.env.GEMINI_FALLBACK_FLASH ?? 'gemini-2.5-flash';
+
+/** Convenience model selectors spread into generateText options. */
+const PRO = { model: MODEL_PRO, fallbackModel: FALLBACK_PRO } as const;
+const FLASH = { model: MODEL_FLASH, fallbackModel: FALLBACK_FLASH } as const;
+
 // Bound Gemini work to stay under the Vercel function limit (NFR-1, §9 risk).
-const GEMINI_TIMEOUT_MS = 20_000;
+// Pro reasoning is slower than flash, so allow a little more headroom.
+const GEMINI_TIMEOUT_MS = 28_000;
 
-let cachedClient: GoogleGenerativeAI | undefined;
-
-function client(): GoogleGenerativeAI {
-  if (cachedClient) return cachedClient;
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new Error('GEMINI_API_KEY is not set.');
-  cachedClient = new GoogleGenerativeAI(key);
-  return cachedClient;
+/** Build a LangChain chat model for a given Gemini model id. */
+function makeModel(model: string, maxOutputTokens: number, temperature: number): ChatGoogleGenerativeAI {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not set.');
+  return new ChatGoogleGenerativeAI({ apiKey, model, maxOutputTokens, temperature, maxRetries: 1 });
 }
 
 /** Thrown when Gemini fails and the caller should return a retryable fallback. */
@@ -84,35 +101,79 @@ export interface MoodSession {
 // Low-level call with a timeout guard
 // ---------------------------------------------------------------------------
 
-async function generateText(
-  prompt: string,
-  opts?: { json?: boolean; maxOutputTokens?: number; feature?: string },
-): Promise<string> {
-  const model = client().getGenerativeModel({
-    model: DEFAULT_MODEL,
-    generationConfig: {
-      maxOutputTokens: opts?.maxOutputTokens ?? 1024,
-      temperature: 0.7,
-      ...(opts?.json ? { responseMimeType: 'application/json' } : {}),
-    },
-  });
+interface GenerateOpts {
+  /** Primary model id. Defaults to the flash tier. */
+  model?: string;
+  /** Stable model id to retry with if the primary model errors. */
+  fallbackModel?: string;
+  /** Hint that we expect JSON back (adds a system nudge; parsing stays tolerant). */
+  json?: boolean;
+  maxOutputTokens?: number;
+  /** Lower temperature for structured/accuracy work, higher for conversational. */
+  temperature?: number;
+  /** Optional system prompt; defaults to the Tako persona. */
+  system?: string;
+  feature?: string;
+}
 
+/** Invoke one LangChain model with a hard timeout; returns the reply text. */
+async function invokeModel(
+  modelId: string,
+  messages: (SystemMessage | HumanMessage)[],
+  maxOutputTokens: number,
+  temperature: number,
+): Promise<string> {
+  const model = makeModel(modelId, maxOutputTokens, temperature);
   const timeout = new Promise<never>((_, reject) =>
     setTimeout(() => reject(new GeminiError('Gemini request timed out')), GEMINI_TIMEOUT_MS),
   );
+  const result = await Promise.race([model.invoke(messages), timeout]);
+  const content = (result as Awaited<ReturnType<typeof model.invoke>>).content;
+  const text = typeof content === 'string'
+    ? content
+    : Array.isArray(content)
+      ? content.map((c) => (typeof c === 'string' ? c : (c as { text?: string }).text ?? '')).join('')
+      : '';
+  if (!text || !text.trim()) throw new GeminiError('Empty response from Gemini');
+  return text;
+}
+
+/**
+ * Run a prompt through LangChain's Gemini chat model. Tries the primary
+ * (frontier) model first; on any error retries once with the stable fallback
+ * model before giving up — so an unavailable model id never breaks a feature.
+ */
+async function generateText(prompt: string, opts?: GenerateOpts): Promise<string> {
+  const primary = opts?.model ?? MODEL_FLASH;
+  const fallback = opts?.fallbackModel;
+  const maxOutputTokens = opts?.maxOutputTokens ?? 1024;
+  const temperature = opts?.temperature ?? (opts?.json ? 0.4 : 0.7);
+  const feature = opts?.feature ?? 'unknown';
+  const system = opts?.system ?? TAKO_PERSONA;
+  const messages: (SystemMessage | HumanMessage)[] = [
+    new SystemMessage(opts?.json ? `${system}\nRespond with raw JSON only — no markdown, no commentary.` : system),
+    new HumanMessage(prompt),
+  ];
 
   const started = Date.now();
-  const feature = opts?.feature ?? 'unknown';
   try {
-    const result = await Promise.race([model.generateContent(prompt), timeout]);
-    const text = (result as Awaited<ReturnType<typeof model.generateContent>>).response.text();
-    if (!text || !text.trim()) throw new GeminiError('Empty response from Gemini');
+    const text = await invokeModel(primary, messages, maxOutputTokens, temperature);
     logUsage(feature, false, Date.now() - started);
     return text;
-  } catch (err) {
+  } catch (primaryErr) {
+    // Frontier model unavailable / transient error → try the stable fallback once.
+    if (fallback && fallback !== primary) {
+      try {
+        const text = await invokeModel(fallback, messages, maxOutputTokens, temperature);
+        logUsage(feature, false, Date.now() - started);
+        return text;
+      } catch {
+        // fall through to the error below
+      }
+    }
     logUsage(feature, true, Date.now() - started);
-    if (err instanceof GeminiError) throw err;
-    throw new GeminiError(`Gemini call failed: ${(err as Error).message}`);
+    if (primaryErr instanceof GeminiError) throw primaryErr;
+    throw new GeminiError(`Gemini call failed: ${(primaryErr as Error).message}`);
   }
 }
 
@@ -140,17 +201,28 @@ function contextBlock(ctx: UserContext): string {
 
 export function buildBreakdownPrompt(goal: string, availableMinutes?: number): string {
   const budget = availableMinutes
-    ? `The student has about ${availableMinutes} minutes available; scope the plan to fit within that budget.`
-    : 'Aim for a realistic same-day plan.';
+    ? `The student has about ${availableMinutes} minutes available today; scope the whole plan to fit within that budget.`
+    : 'Aim for a realistic same-day plan (roughly 60–120 minutes total unless the goal clearly needs more).';
   return [
-    TAKO_PERSONA,
+    'A university student wants help achieving this goal:',
+    `"""${goal}"""`,
     '',
-    `Break this student goal into an ordered list of small, actionable tasks: "${goal}".`,
+    'The goal text may include a "Details:" section with answers the student gave to',
+    'clarifying questions (subject, scope, deadline, format, count, difficulty). USE those',
+    'details — never ignore them — so the plan is specific to THIS student, not generic.',
+    '',
     budget,
-    'Each task: a short actionable title, an estimated duration in whole minutes (5–90),',
-    'and a point value (5–50) reflecting effort. Keep it to 3–8 tasks.',
     '',
-    'Respond ONLY with a JSON array, no prose, no markdown fences, in this exact shape:',
+    'Produce an ordered, realistic breakdown of small, concrete, actionable steps:',
+    '- Each step is a single sitting the student can actually start and finish.',
+    '- Titles are specific and action-first (e.g. "Summarise Ch.3: process scheduling"),',
+    '  not vague ("study", "review notes"). Reference the real subject/topic when known.',
+    '- Order the steps the way you would actually do them (gather → learn → practise → review).',
+    '- minutes: a realistic whole-number estimate (5–90) per step.',
+    '- points: 5–50 reflecting the effort/difficulty of that step.',
+    '- Use 3–8 steps; fewer for small goals, more for larger ones — match the scope.',
+    '',
+    'Respond with ONLY a JSON array in this exact shape (no prose, no markdown fences):',
     '[{"title": string, "minutes": number, "points": number}]',
   ].join('\n');
 }
@@ -204,8 +276,10 @@ export async function generateBreakdown(
 ): Promise<{ tasks: PlanTask[]; fallback: boolean }> {
   try {
     const raw = await generateText(buildBreakdownPrompt(goal, availableMinutes), {
+      ...PRO,
       json: true,
-      maxOutputTokens: 1024,
+      temperature: 0.4,
+      maxOutputTokens: 1200,
       feature: 'breakdown',
     });
     return { tasks: parseBreakdown(raw), fallback: false };
@@ -229,7 +303,7 @@ export async function regenerateBreakdown(
     ? `\nProduce a DIFFERENT plan. Avoid repeating these previous tasks: ${avoid.join('; ')}.`
     : '\nProduce a fresh alternative plan with different phrasing and structure.';
   try {
-    const raw = await generateText(base + avoidNote, { json: true, maxOutputTokens: 1024, feature: 'regenerate' });
+    const raw = await generateText(base + avoidNote, { ...PRO, json: true, temperature: 0.6, maxOutputTokens: 1200, feature: 'regenerate' });
     return { tasks: parseBreakdown(raw), fallback: false };
   } catch (err) {
     logFailure('regenerate', err);
@@ -243,13 +317,56 @@ export async function regenerateBreakdown(
 
 export function buildChatPrompt(message: string, ctx: UserContext): string {
   return [
-    TAKO_PERSONA,
     contextBlock(ctx),
+    '',
+    "You can see the student's live stats and their current task list above.",
+    "If they ask what they should do, what's left, or what their current/available tasks are,",
+    'answer using their ACTUAL pending tasks by name (with rough minutes). If they have no',
+    'pending tasks, say so plainly and offer to help plan something new.',
     '',
     `The student says: "${message}"`,
     '',
-    'Reply in 1–3 short sentences. Be encouraging and practical. Plain text only.',
+    'Reply in 1–4 short sentences. Be encouraging, specific, and practical. Plain text only,',
+    'no markdown. Ground your reply in their real tasks/stats rather than speaking generically.',
   ].join('\n');
+}
+
+/**
+ * Build a UserContext for a signed-in user from Firestore: their profile
+ * (name/points/streak/mood) and their pending (not-done) tasks for today, so
+ * Tako can answer questions like "what are my current tasks?" (FR-7.2).
+ *
+ * Best-effort: any read failure degrades to an empty/partial context rather
+ * than failing the chat request.
+ */
+export async function loadUserContext(uid: string): Promise<UserContext> {
+  const ctx: UserContext = {};
+  const db = adminDb();
+  try {
+    const profile = (await db.collection('users').doc(uid).get()).data() ?? {};
+    if (typeof profile.name === 'string') ctx.name = profile.name;
+    if (typeof profile.points === 'number') ctx.points = profile.points;
+    if (typeof profile.streakDays === 'number') ctx.streakDays = profile.streakDays;
+    if (typeof profile.shields === 'number') ctx.shields = profile.shields;
+    if (typeof profile.mood === 'string') ctx.mood = profile.mood;
+  } catch {
+    // ignore — profile is optional context
+  }
+  try {
+    const snap = await db.collection('users').doc(uid).collection('tasks').where('status', '==', 'todo').limit(25).get();
+    const pending = snap.docs
+      .map((d) => d.data())
+      .map((t) => {
+        const title = typeof t.title === 'string' ? t.title.trim() : '';
+        const minutes = typeof t.minutes === 'number' ? t.minutes : undefined;
+        return title ? (minutes ? `${title} (~${minutes}m)` : title) : '';
+      })
+      .filter((s) => s.length > 0);
+    if (pending.length) ctx.pendingTasks = pending;
+  } catch {
+    // ignore — tasks are optional context
+  }
+  return ctx;
 }
 
 export function fallbackChat(ctx: UserContext): string {
@@ -262,7 +379,7 @@ export async function generateChatReply(
   ctx: UserContext,
 ): Promise<{ reply: string; fallback: boolean }> {
   try {
-    const raw = await generateText(buildChatPrompt(message, ctx), { maxOutputTokens: 400, feature: 'chat' });
+    const raw = await generateText(buildChatPrompt(message, ctx), { ...FLASH, maxOutputTokens: 500, feature: 'chat' });
     return { reply: raw.trim(), fallback: false };
   } catch (err) {
     logFailure('chat', err);
@@ -301,7 +418,7 @@ export async function generateNudge(
   ctx: UserContext,
 ): Promise<{ nudge: NudgeCard; fallback: boolean }> {
   try {
-    const raw = await generateText(buildNudgePrompt(ctx), { maxOutputTokens: 200, feature: 'nudge' });
+    const raw = await generateText(buildNudgePrompt(ctx), { ...FLASH, maxOutputTokens: 200, feature: 'nudge' });
     return { nudge: { text: raw.trim(), actions: NUDGE_ACTIONS }, fallback: false };
   } catch (err) {
     logFailure('nudge', err);
@@ -366,6 +483,7 @@ export async function generateMoodSession(
 ): Promise<{ session: MoodSession; fallback: boolean }> {
   try {
     const raw = await generateText(buildMoodSessionPrompt(mood, ctx), {
+      ...FLASH,
       json: true,
       maxOutputTokens: 300,
       feature: 'mood-session',
@@ -389,15 +507,22 @@ export interface ClarifyQuestion {
 
 export function buildClarifyPrompt(goal: string): string {
   return [
-    TAKO_PERSONA,
-    '',
     `A student wants help with this goal/task: "${goal}".`,
-    'If it is ambiguous, ask up to 3 SHORT clarifying questions that would let you',
-    'build a far more specific, useful plan (e.g. subject, scope, deadline, format,',
-    'difficulty, number of items). For each question, suggest 2-4 quick-pick options.',
-    'If the goal is already clear and specific, return an empty array.',
     '',
-    'Respond ONLY with JSON, no prose, in this shape:',
+    'Before building a plan, act like a thoughtful tutor and ask the 2–3 MOST useful',
+    'clarifying questions whose answers would most change the plan. Good things to clarify:',
+    'the exact subject/topic, the scope or syllabus range, the deadline / time available,',
+    'the format (e.g. quiz, notes, slides, code, presentation), the difficulty, and how many',
+    'items/steps they want.',
+    '',
+    'Rules:',
+    '- Ask 2–3 questions unless the goal is already fully specified (then return []).',
+    '- Each question is short and concrete. Provide 2–4 quick-pick options that are realistic',
+    '  answers for THIS goal, not generic. e.g. for "how many" use ["3","5","10"];',
+    '  for difficulty use ["Easy","Medium","Hard"]; for a quiz topic, suggest likely topics.',
+    '- Never ask something already answered in the goal text.',
+    '',
+    'Respond with ONLY a JSON array in this exact shape (no prose, no markdown fences):',
     '[{"question": string, "options": [string]}]',
   ].join('\n');
 }
@@ -427,7 +552,7 @@ export function parseClarify(raw: string): ClarifyQuestion[] {
 
 export async function generateClarify(goal: string): Promise<{ questions: ClarifyQuestion[] }> {
   try {
-    const raw = await generateText(buildClarifyPrompt(goal), { json: true, maxOutputTokens: 400, feature: 'clarify' });
+    const raw = await generateText(buildClarifyPrompt(goal), { ...PRO, json: true, temperature: 0.5, maxOutputTokens: 500, feature: 'clarify' });
     return { questions: parseClarify(raw) };
   } catch (err) {
     logFailure('clarify', err);
@@ -492,6 +617,7 @@ export async function generatePlanDay(
 ): Promise<{ blocks: DayBlock[] }> {
   try {
     const raw = await generateText(buildPlanDayPrompt(tasks, availableMinutes, mood), {
+      ...FLASH,
       json: true,
       maxOutputTokens: 700,
       feature: 'plan-day',
@@ -561,7 +687,9 @@ export async function generateQuiz(
 ): Promise<{ questions: QuizQuestion[] }> {
   try {
     const raw = await generateText(buildQuizPrompt(topic, count, difficulty), {
+      ...PRO,
       json: true,
+      temperature: 0.5,
       maxOutputTokens: 1500,
       feature: 'quiz',
     });
@@ -580,13 +708,21 @@ function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
 }
 
-/** Strip ```json fences if the model wraps output despite instructions. */
+/**
+ * Strip ```json fences and, if the model still wraps the JSON in prose, isolate
+ * the outermost array/object so JSON.parse succeeds anyway (defensive — frontier
+ * models occasionally add a sentence despite "JSON only" instructions).
+ */
 function stripJsonFences(text: string): string {
-  return text
-    .trim()
-    .replace(/^```(?:json)?\s*/i, '')
-    .replace(/\s*```$/i, '')
-    .trim();
+  const t = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  if (t.startsWith('[') || t.startsWith('{')) return t;
+  const firstArr = t.indexOf('[');
+  const firstObj = t.indexOf('{');
+  const start = firstArr === -1 ? firstObj : firstObj === -1 ? firstArr : Math.min(firstArr, firstObj);
+  if (start === -1) return t;
+  const closeCh = t[start] === '[' ? ']' : '}';
+  const end = t.lastIndexOf(closeCh);
+  return end > start ? t.slice(start, end + 1) : t;
 }
 
 /**

@@ -131,12 +131,16 @@ class _Header extends StatelessWidget {
         ],
         _CircleIcon(icon: Icons.notifications_none_rounded, onTap: () {}),
         const SizedBox(width: AppSpacing.sm),
-        GestureDetector(
-          onTap: () => context.push('/profile'),
-          child: CircleAvatar(
-            radius: 18,
-            backgroundColor: AppColors.energy,
-            child: Text(user.initials, style: AppTypography.ui(15, color: Colors.white, weight: FontWeight.w800)),
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => context.push('/profile'),
+            customBorder: const CircleBorder(),
+            child: CircleAvatar(
+              radius: 18,
+              backgroundColor: AppColors.energy,
+              child: Text(user.initials, style: AppTypography.ui(15, color: Colors.white, weight: FontWeight.w800)),
+            ),
           ),
         ),
       ],

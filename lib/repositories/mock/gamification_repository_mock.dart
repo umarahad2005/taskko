@@ -17,6 +17,12 @@ class GamificationRepositoryMock implements GamificationRepository {
   Future<AppUser> setMood(Mood mood) async => Seed.user.copyWith(mood: mood);
 
   @override
+  Future<AppUser> updateProfile({String? name, Mood? mood}) async {
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    return Seed.user.copyWith(name: name, mood: mood);
+  }
+
+  @override
   Future<AppUser> recordTaskCompletion({required int points, required bool nowDone}) async =>
       Seed.user.copyWith(points: (Seed.user.points + (nowDone ? points : -points)).clamp(0, 1 << 30));
 

@@ -70,15 +70,22 @@ class FirebaseAuthRepository implements AuthRepository {
       if (e.code == GoogleSignInExceptionCode.canceled) {
         throw const AuthCancelledException();
       }
-      rethrow;
+      // Surface a clearer reason (e.g. config/SHA-1 or Play services issue)
+      // instead of a generic failure, so problems are diagnosable on-device.
+      throw AuthException('Google sign-in failed (${e.code.name}). ${e.description ?? ''}'.trim());
     }
 
     final idToken = account.authentication.idToken;
     if (idToken == null) {
-      throw FirebaseAuthException(code: 'missing-google-id-token');
+      throw const AuthException(
+          'Google did not return an ID token — check the SHA-1 and web client ID configuration.');
     }
-    final cred = await _auth.signInWithCredential(GoogleAuthProvider.credential(idToken: idToken));
-    return _toAppUser(cred.user!);
+    try {
+      final cred = await _auth.signInWithCredential(GoogleAuthProvider.credential(idToken: idToken));
+      return _toAppUser(cred.user!);
+    } on FirebaseAuthException catch (e) {
+      throw AuthException('Firebase rejected the Google sign-in: ${e.message ?? e.code}');
+    }
   }
 
   @override

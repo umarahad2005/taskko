@@ -7,9 +7,9 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_typography.dart';
 import '../../../widgets/taskko_logo.dart';
 
-/// Splash (SRS FR-1) — deep-navy brand moment. After the brand beat it restores
-/// any persisted session: signed-in users skip straight to Home/Admin, everyone
-/// else continues to onboarding.
+/// Splash (SRS FR-1) — deep-navy brand moment with a staggered entrance
+/// animation. After the brand beat it restores any persisted session: signed-in
+/// users skip straight to Home/Admin, everyone else continues to onboarding.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -17,11 +17,47 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1200),
+  )..forward();
+
+  late final Animation<double> _logoScale = CurvedAnimation(
+    parent: _c,
+    curve: const Interval(0.0, 0.55, curve: Curves.easeOutBack),
+  );
+  late final Animation<double> _logoFade = CurvedAnimation(
+    parent: _c,
+    curve: const Interval(0.0, 0.45, curve: Curves.easeOut),
+  );
+  late final Animation<double> _titleFade = CurvedAnimation(
+    parent: _c,
+    curve: const Interval(0.30, 0.70, curve: Curves.easeOut),
+  );
+  late final Animation<double> _subtitleFade = CurvedAnimation(
+    parent: _c,
+    curve: const Interval(0.45, 0.85, curve: Curves.easeOut),
+  );
+  late final Animation<double> _loaderFade = CurvedAnimation(
+    parent: _c,
+    curve: const Interval(0.6, 1.0, curve: Curves.easeOut),
+  );
+  late final Animation<Offset> _rise = Tween<Offset>(
+    begin: const Offset(0, 0.4),
+    end: Offset.zero,
+  ).animate(CurvedAnimation(parent: _c, curve: const Interval(0.30, 0.85, curve: Curves.easeOutCubic)));
+
   @override
   void initState() {
     super.initState();
     _route();
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
   }
 
   Future<void> _route() async {
@@ -51,39 +87,64 @@ class _SplashScreenState extends State<SplashScreen> {
         decoration: const BoxDecoration(gradient: AppColors.splashGradient),
         child: Stack(
           children: [
-            // Subtle decorative blobs (top-right cool, bottom-left warm).
-            Positioned(
-              top: -60,
-              right: -50,
-              child: _blob(220, AppColors.primary.withValues(alpha: 0.18)),
-            ),
-            Positioned(
-              bottom: -70,
-              left: -60,
-              child: _blob(200, AppColors.energy.withValues(alpha: 0.12)),
+            // Subtle decorative blobs fade in with the brand beat.
+            FadeTransition(
+              opacity: _logoFade,
+              child: Stack(
+                children: [
+                  Positioned(
+                    top: -60,
+                    right: -50,
+                    child: _blob(220, AppColors.primary.withValues(alpha: 0.18)),
+                  ),
+                  Positioned(
+                    bottom: -70,
+                    left: -60,
+                    child: _blob(200, AppColors.energy.withValues(alpha: 0.12)),
+                  ),
+                ],
+              ),
             ),
             Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.45),
-                          blurRadius: 48,
-                          spreadRadius: 4,
+                  FadeTransition(
+                    opacity: _logoFade,
+                    child: ScaleTransition(
+                      scale: _logoScale,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.45),
+                              blurRadius: 48,
+                              spreadRadius: 4,
+                            ),
+                          ],
                         ),
-                      ],
+                        child: const TaskkoLogo(size: 96),
+                      ),
                     ),
-                    child: const TaskkoLogo(size: 96),
                   ),
                   const SizedBox(height: 24),
-                  Text('taskko', style: AppTypography.display(40, color: Colors.white)),
+                  SlideTransition(
+                    position: _rise,
+                    child: FadeTransition(
+                      opacity: _titleFade,
+                      child: Text('taskko', style: AppTypography.display(40, color: Colors.white)),
+                    ),
+                  ),
                   const SizedBox(height: 8),
-                  Text(
-                    'your AI productivity companion',
-                    style: AppTypography.ui(14, color: Colors.white70, weight: FontWeight.w500),
+                  SlideTransition(
+                    position: _rise,
+                    child: FadeTransition(
+                      opacity: _subtitleFade,
+                      child: Text(
+                        'your AI productivity companion',
+                        style: AppTypography.ui(14, color: Colors.white70, weight: FontWeight.w500),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -93,22 +154,25 @@ class _SplashScreenState extends State<SplashScreen> {
               left: 0,
               right: 0,
               bottom: 56,
-              child: Column(
-                children: [
-                  SizedBox(
-                    width: 120,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(99),
-                      child: const LinearProgressIndicator(
-                        minHeight: 3,
-                        backgroundColor: Colors.white24,
-                        color: Colors.white,
+              child: FadeTransition(
+                opacity: _loaderFade,
+                child: Column(
+                  children: [
+                    SizedBox(
+                      width: 120,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(99),
+                        child: const LinearProgressIndicator(
+                          minHeight: 3,
+                          backgroundColor: Colors.white24,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text('loading…', style: AppTypography.ui(12, color: Colors.white60, weight: FontWeight.w600)),
-                ],
+                    const SizedBox(height: 12),
+                    Text('loading…', style: AppTypography.ui(12, color: Colors.white60, weight: FontWeight.w600)),
+                  ],
+                ),
               ),
             ),
           ],

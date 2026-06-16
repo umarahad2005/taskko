@@ -89,6 +89,29 @@ class GamificationRepositoryFirestore implements GamificationRepository {
   }
 
   @override
+  Future<AppUser> updateProfile({String? name, Mood? mood}) async {
+    final user = _auth.currentUser;
+    if (user == null) throw StateError('Not signed in');
+
+    final data = <String, dynamic>{};
+    final trimmed = name?.trim();
+    if (trimmed != null && trimmed.isNotEmpty) data['name'] = trimmed;
+    if (mood != null) data['mood'] = mood.name;
+    if (data.isNotEmpty) await _doc.set(data, SetOptions(merge: true));
+
+    // Keep the Firebase Auth display name in sync so the new name shows
+    // wherever the auth identity is used (e.g. on next sign-in / token refresh).
+    if (trimmed != null && trimmed.isNotEmpty && trimmed != user.displayName) {
+      await user.updateDisplayName(trimmed);
+    }
+
+    final snap = await _doc.get();
+    final u = _fromDoc(_uid, snap.data() ?? const {});
+    _mirrorPublic(u);
+    return u;
+  }
+
+  @override
   Future<AppUser> recordTaskCompletion({required int points, required bool nowDone}) async {
     final updated = await _db.runTransaction<Map<String, dynamic>>((tx) async {
       final snap = await tx.get(_doc);

@@ -23,6 +23,15 @@ abstract final class AppTheme {
       scaffoldBackgroundColor: AppColors.background,
       textTheme: AppTypography.textTheme(),
       splashFactory: InkRipple.splashFactory,
+      // iOS-style slide transitions + left-edge swipe-to-go-back on Android too,
+      // so pushed routes (profile, settings, history, …) feel native and support
+      // the standard back gesture.
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        },
+      ),
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,

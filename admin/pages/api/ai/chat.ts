@@ -14,7 +14,7 @@
 import type { NextApiResponse } from 'next';
 import { withAuth, type AuthedRequest } from '../../../lib/auth';
 import { methodGuard, sendError, sendJson } from '../../../lib/http';
-import { generateChatReply, type UserContext } from '../../../lib/gemini';
+import { generateChatReply, loadUserContext, type UserContext } from '../../../lib/gemini';
 
 export default withAuth(async (req: AuthedRequest, res: NextApiResponse) => {
   if (!methodGuard(req, res, ['POST'])) return;
@@ -28,8 +28,13 @@ export default withAuth(async (req: AuthedRequest, res: NextApiResponse) => {
     return sendError(res, 400, 'A non-empty message (≤2000 chars) is required', false);
   }
 
-  const ctx: UserContext =
+  // Ground Tako in the caller's real state: load their profile + pending tasks
+  // from Firestore (so "what are my current tasks?" works), then let any
+  // client-provided context override/augment it.
+  const serverCtx = await loadUserContext(req.user.uid);
+  const clientCtx: UserContext =
     typeof context === 'object' && context !== null ? (context as UserContext) : {};
+  const ctx: UserContext = { ...serverCtx, ...clientCtx };
 
   const result = await generateChatReply(message.trim(), ctx);
   sendJson(res, result);

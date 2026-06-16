@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../features/admin/view/admin_entry_screen.dart';
+import '../features/admin/view/admin_panel_screen.dart';
 import '../features/focus/view/focus_timer_screen.dart';
 import '../features/auth/view/login_screen.dart';
 import '../features/auth/view/signup_screen.dart';
@@ -12,7 +12,9 @@ import '../features/hub/view/hub_screen.dart';
 import '../features/onboarding/view/onboarding_screen.dart';
 import '../features/plan/view/plan_screen.dart';
 import '../features/planday/view/plan_day_screen.dart';
+import '../features/profile/view/edit_profile_screen.dart';
 import '../features/profile/view/profile_screen.dart';
+import '../models/app_user.dart';
 import '../features/quiz/view/quiz_screen.dart';
 import '../features/settings/view/settings_screen.dart';
 import '../features/splash/view/splash_screen.dart';
@@ -29,8 +31,16 @@ final GoRouter appRouter = GoRouter(
     GoRoute(path: '/plan', builder: (_, _) => const PlanScreen()),
     GoRoute(path: '/hub', builder: (_, _) => const HubScreen()),
     GoRoute(path: '/chat', builder: (_, _) => const ChatScreen()),
-    GoRoute(path: '/admin', builder: (_, _) => const AdminEntryScreen()),
+    GoRoute(path: '/admin', builder: (_, _) => const AdminPanelScreen()),
     GoRoute(path: '/profile', builder: (_, _) => const ProfileScreen()),
+    GoRoute(
+      path: '/profile/edit',
+      builder: (context, state) {
+        final user = state.extra;
+        if (user is AppUser) return EditProfileScreen(user: user);
+        return const Scaffold(body: Center(child: Text('No profile to edit')));
+      },
+    ),
     GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
     GoRoute(path: '/history', builder: (_, _) => const HistoryScreen()),
     GoRoute(path: '/quiz', builder: (_, _) => const QuizScreen()),

@@ -19,3 +19,13 @@ abstract interface class AuthRepository {
 class AuthCancelledException implements Exception {
   const AuthCancelledException();
 }
+
+/// A sign-in/up failure with a user-facing [message]. Lets the repository map
+/// provider-specific errors (e.g. Google DEVELOPER_ERROR / network) to a clear
+/// message the cubit can show, instead of a generic "something went wrong".
+class AuthException implements Exception {
+  const AuthException(this.message);
+  final String message;
+  @override
+  String toString() => message;
+}

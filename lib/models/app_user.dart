@@ -35,6 +35,8 @@ class AppUser extends Equatable {
   }
 
   AppUser copyWith({
+    String? name,
+    String? email,
     int? points,
     int? streakDays,
     int? shields,
@@ -42,8 +44,8 @@ class AppUser extends Equatable {
   }) {
     return AppUser(
       id: id,
-      name: name,
-      email: email,
+      name: name ?? this.name,
+      email: email ?? this.email,
       points: points ?? this.points,
       streakDays: streakDays ?? this.streakDays,
       shields: shields ?? this.shields,
