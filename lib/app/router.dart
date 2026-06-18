@@ -9,6 +9,7 @@ import '../features/chat/view/chat_screen.dart';
 import '../features/history/view/history_screen.dart';
 import '../features/home/view/home_screen.dart';
 import '../features/hub/view/hub_screen.dart';
+import '../features/legal/view/legal_screen.dart';
 import '../features/onboarding/view/onboarding_screen.dart';
 import '../features/plan/view/plan_screen.dart';
 import '../features/planday/view/plan_day_screen.dart';
@@ -44,6 +45,8 @@ final GoRouter appRouter = GoRouter(
     GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
     GoRoute(path: '/history', builder: (_, _) => const HistoryScreen()),
     GoRoute(path: '/quiz', builder: (_, _) => const QuizScreen()),
+    GoRoute(path: '/terms', builder: (_, _) => const LegalScreen(doc: kTermsDoc)),
+    GoRoute(path: '/privacy', builder: (_, _) => const LegalScreen(doc: kPrivacyDoc)),
     GoRoute(
       path: '/planday',
       builder: (context, state) {

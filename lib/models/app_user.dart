@@ -14,6 +14,7 @@ class AppUser extends Equatable {
     this.shields = 0,
     this.mood = Mood.focused,
     this.isAdmin = false,
+    this.emailVerified = true,
   });
 
   final String id;
@@ -24,6 +25,10 @@ class AppUser extends Equatable {
   final int shields;
   final Mood mood;
   final bool isAdmin;
+
+  /// Whether the account's email has been verified (Firebase). Google sign-ins
+  /// are verified automatically; email/password signups start unverified.
+  final bool emailVerified;
 
   String get initials => name.isNotEmpty ? name.trim()[0].toUpperCase() : '?';
   Rank get rank => Rank.forPoints(points);
@@ -51,9 +56,10 @@ class AppUser extends Equatable {
       shields: shields ?? this.shields,
       mood: mood ?? this.mood,
       isAdmin: isAdmin,
+      emailVerified: emailVerified,
     );
   }
 
   @override
-  List<Object?> get props => [id, name, email, points, streakDays, shields, mood, isAdmin];
+  List<Object?> get props => [id, name, email, points, streakDays, shields, mood, isAdmin, emailVerified];
 }

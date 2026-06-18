@@ -35,7 +35,13 @@ class FirebaseAuthRepository implements AuthRepository {
     final name = (displayName != null && displayName.isNotEmpty)
         ? displayName
         : (user.email?.split('@').first ?? 'Student');
-    return AppUser(id: user.uid, name: name, email: user.email ?? '', isAdmin: isAdmin);
+    return AppUser(
+      id: user.uid,
+      name: name,
+      email: user.email ?? '',
+      isAdmin: isAdmin,
+      emailVerified: user.emailVerified,
+    );
   }
 
   @override
@@ -48,6 +54,10 @@ class FirebaseAuthRepository implements AuthRepository {
   Future<AppUser> signUp({required String name, required String email, required String password}) async {
     final cred = await _auth.createUserWithEmailAndPassword(email: email.trim(), password: password);
     await cred.user!.updateDisplayName(name.trim());
+    // Send a verification email on signup (best-effort — don't block the flow).
+    try {
+      await cred.user!.sendEmailVerification();
+    } catch (_) {}
     await cred.user!.reload();
     return _toAppUser(_auth.currentUser ?? cred.user!);
   }
@@ -90,6 +100,14 @@ class FirebaseAuthRepository implements AuthRepository {
 
   @override
   Future<void> sendPasswordReset(String email) => _auth.sendPasswordResetEmail(email: email.trim());
+
+  @override
+  Future<void> sendEmailVerification() async {
+    final user = _auth.currentUser;
+    if (user != null && !user.emailVerified) {
+      await user.sendEmailVerification();
+    }
+  }
 
   @override
   Future<void> signOut() async {

@@ -135,7 +135,7 @@ class _HubBody extends StatelessWidget {
     if (report == null) return const SizedBox.shrink();
     return ListView(
       padding: const EdgeInsets.fromLTRB(AppSpacing.gutter, 0, AppSpacing.gutter, AppSpacing.xxl),
-      children: [ReportCardView(report: report, onShare: () => _share(report.shareText))],
+      children: [ReportCardView(report: report)],
     );
   }
 

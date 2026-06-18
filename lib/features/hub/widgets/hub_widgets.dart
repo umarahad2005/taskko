@@ -1,4 +1,9 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../models/badge_item.dart';
 import '../../../models/leaderboard_entry.dart';
@@ -243,37 +248,91 @@ class _LeaderRow extends StatelessWidget {
   }
 }
 
-/// Shareable weekly report card (SRS FR-6.5 / FR-6.6).
-class ReportCardView extends StatelessWidget {
-  const ReportCardView({super.key, required this.report, required this.onShare});
+/// Shareable weekly report card (SRS FR-6.5 / FR-6.6). The card is captured as a
+/// PNG image (via [RepaintBoundary]) and shared as a file — so it lands as a
+/// picture in WhatsApp/Instagram/etc., not as plain text.
+class ReportCardView extends StatefulWidget {
+  const ReportCardView({super.key, required this.report});
   final WeeklyReport report;
-  final VoidCallback onShare;
+
+  @override
+  State<ReportCardView> createState() => _ReportCardViewState();
+}
+
+class _ReportCardViewState extends State<ReportCardView> {
+  final _cardKey = GlobalKey();
+  bool _sharing = false;
+
+  Future<void> _shareAsImage() async {
+    if (_sharing) return;
+    setState(() => _sharing = true);
+    try {
+      // Let any pending frame settle, then rasterise the card at high DPI.
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      final boundary = _cardKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (data == null) throw Exception('Failed to encode image');
+      final file = File('${Directory.systemTemp.path}/taskko_report_card.png');
+      await file.writeAsBytes(data.buffer.asUint8List());
+      await SharePlus.instance.share(
+        ShareParams(files: [XFile(file.path, mimeType: 'image/png')], text: 'My Taskko week 📚'),
+      );
+    } catch (_) {
+      // Fallback to text if image capture/share fails for any reason.
+      await SharePlus.instance.share(ShareParams(text: widget.report.shareText));
+    } finally {
+      if (mounted) setState(() => _sharing = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final report = widget.report;
     return Column(
       children: [
-        BentoCard(
-          gradient: AppColors.primaryGradient,
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('THIS WEEK', style: AppTypography.ui(11, color: Colors.white70, weight: FontWeight.w800)),
-              const SizedBox(height: 4),
-              Text('Your report card', style: AppTypography.display(24, color: Colors.white)),
-              const SizedBox(height: AppSpacing.lg),
-              Row(children: [
-                _Stat(value: '${report.tasksDone}', label: 'tasks done'),
-                _Stat(value: '${report.points}', label: 'points'),
-                _Stat(value: '${report.streakDays}d', label: 'streak'),
-              ]),
-              const SizedBox(height: AppSpacing.lg),
-              Row(children: [
-                _Stat(value: '${report.focusMinutes ~/ 60}h ${report.focusMinutes % 60}m', label: 'focused'),
-                _Stat(value: report.topGoal, label: 'top goal', flexible: true),
-              ]),
-            ],
+        // Captured region — solid background so the PNG isn't transparent.
+        RepaintBoundary(
+          key: _cardKey,
+          child: Container(
+            color: AppColors.background,
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            child: Column(
+              children: [
+                BentoCard(
+                  gradient: AppColors.primaryGradient,
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('THIS WEEK', style: AppTypography.ui(11, color: Colors.white70, weight: FontWeight.w800)),
+                      const SizedBox(height: 4),
+                      Text('Your report card', style: AppTypography.display(24, color: Colors.white)),
+                      const SizedBox(height: AppSpacing.lg),
+                      Row(children: [
+                        _Stat(value: '${report.tasksDone}', label: 'tasks done'),
+                        _Stat(value: '${report.points}', label: 'points'),
+                        _Stat(value: '${report.streakDays}d', label: 'streak'),
+                      ]),
+                      const SizedBox(height: AppSpacing.lg),
+                      Row(children: [
+                        _Stat(value: '${report.focusMinutes ~/ 60}h ${report.focusMinutes % 60}m', label: 'focused'),
+                        _Stat(value: report.topGoal, label: 'top goal', flexible: true),
+                      ]),
+                      const SizedBox(height: AppSpacing.lg),
+                      Row(
+                        children: [
+                          const Icon(Icons.auto_awesome_rounded, color: Colors.white70, size: 14),
+                          const SizedBox(width: 6),
+                          Text('taskko · your AI study buddy',
+                              style: AppTypography.ui(11, color: Colors.white70, weight: FontWeight.w700)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: AppSpacing.lg),
@@ -281,16 +340,18 @@ class ReportCardView extends StatelessWidget {
           color: AppColors.energy,
           borderRadius: AppRadii.lgRadius,
           child: InkWell(
-            onTap: onShare,
+            onTap: _sharing ? null : _shareAsImage,
             borderRadius: AppRadii.lgRadius,
             child: Container(
               height: 54,
               alignment: Alignment.center,
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.ios_share_rounded, color: Colors.white, size: 20),
-                const SizedBox(width: AppSpacing.sm),
-                Text('Share my week', style: AppTypography.ui(16, color: Colors.white, weight: FontWeight.w800)),
-              ]),
+              child: _sharing
+                  ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
+                  : Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.ios_share_rounded, color: Colors.white, size: 20),
+                      const SizedBox(width: AppSpacing.sm),
+                      Text('Share my week (image)', style: AppTypography.ui(16, color: Colors.white, weight: FontWeight.w800)),
+                    ]),
             ),
           ),
         ),

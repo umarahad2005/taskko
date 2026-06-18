@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -168,10 +169,25 @@ class AuthBackground extends StatelessWidget {
       DecoratedBox(decoration: const BoxDecoration(gradient: AppColors.authGradient), child: child);
 }
 
-class _TermsRow extends StatelessWidget {
+class _TermsRow extends StatefulWidget {
   const _TermsRow({required this.value, required this.onChanged});
   final bool value;
   final ValueChanged<bool> onChanged;
+
+  @override
+  State<_TermsRow> createState() => _TermsRowState();
+}
+
+class _TermsRowState extends State<_TermsRow> {
+  late final TapGestureRecognizer _terms = TapGestureRecognizer()..onTap = () => context.push('/terms');
+  late final TapGestureRecognizer _privacy = TapGestureRecognizer()..onTap = () => context.push('/privacy');
+
+  @override
+  void dispose() {
+    _terms.dispose();
+    _privacy.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -182,8 +198,8 @@ class _TermsRow extends StatelessWidget {
           width: 28,
           height: 28,
           child: Checkbox(
-            value: value,
-            onChanged: (v) => onChanged(v ?? false),
+            value: widget.value,
+            onChanged: (v) => widget.onChanged(v ?? false),
             activeColor: AppColors.primary,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.sm)),
           ),
@@ -196,9 +212,15 @@ class _TermsRow extends StatelessWidget {
               text: "I agree to Taskko's ",
               style: AppTypography.ui(13, color: AppColors.ink3, weight: FontWeight.w500),
               children: [
-                TextSpan(text: 'Terms', style: AppTypography.ui(13, color: AppColors.primary, weight: FontWeight.w700)),
+                TextSpan(
+                    text: 'Terms',
+                    style: AppTypography.ui(13, color: AppColors.primary, weight: FontWeight.w700),
+                    recognizer: _terms),
                 const TextSpan(text: ' and '),
-                TextSpan(text: 'Privacy Policy', style: AppTypography.ui(13, color: AppColors.primary, weight: FontWeight.w700)),
+                TextSpan(
+                    text: 'Privacy Policy',
+                    style: AppTypography.ui(13, color: AppColors.primary, weight: FontWeight.w700),
+                    recognizer: _privacy),
                 const TextSpan(text: '.'),
               ],
             )),

@@ -13,6 +13,9 @@ abstract interface class AuthRepository {
   Future<void> sendPasswordReset(String email);
   Future<void> signOut();
 
+  /// Send a verification email to the signed-in user (no-op if already verified).
+  Future<void> sendEmailVerification();
+
   /// Change the account email (re-authenticates with [currentPassword] first).
   /// Sends a verification link to [newEmail]; the change applies once confirmed.
   Future<void> updateEmail({required String newEmail, required String currentPassword});

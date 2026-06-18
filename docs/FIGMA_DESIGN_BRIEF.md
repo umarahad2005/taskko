@@ -9,17 +9,20 @@
 1. Splash · 2. Onboarding (3 slides) · 3. Sign up · 4. Login · 5. Home ·
 6. AI Plan Studio · 7. Gamification Hub · 8. Tako Chat · 9. Profile ·
 10. Settings (Reminders) · 11. Focus Timer · 12. History · 13. Quiz ·
-14. Plan My Day · 15. Admin Entry
+14. Plan My Day · 15. Admin console · 16. Edit profile · 17. Terms · 18. Privacy
 
-**Figma frames (24 total — includes multi-step flows):**
+**Figma frames (31 target — includes multi-step flows):**
 
 | Flow | Frames in Figma |
 |------|-----------------|
 | Pre-auth | Splash · Onboarding 1–3 · Sign up · Login |
-| Main tabs | Home · Plan Studio · Hub Badges · Hub Squad · Hub Report card · Tako Chat |
-| Profile stack | Profile · Settings · History · Plan My Day · Admin Entry |
+| Main tabs | Home · Plan Goal · Plan Clarify · Plan Generating · Plan Review · Hub Badges · Hub Squad · Hub Report card · Tako Chat |
+| Profile stack | Profile · Edit profile · Settings · History · Plan My Day · Terms · Privacy |
 | **Quiz flow (4)** | Input (topic) → Generating → Taking → Result |
 | **Focus flow (3)** | Setup (pick time) → Running (timer) → Done (joke + mood) |
+| **Admin (2)** | Dashboard (KPIs) · Users (search + filters) |
+
+> **Note:** The old `17 Admin Entry` placeholder (“Coming in this milestone”) is **obsolete** — replace with the live in-app admin console from `lib/features/admin/view/admin_panel_screen.dart`.
 
 ---
 
@@ -240,10 +243,11 @@ Section headers: UPPERCASE Manrope 11–12 w800 `#6B6B82`, letter-spacing 1.1.
 - Demo convo: Tako overdue-reading message → nudge "Your 5-day streak is alive 🔥…" → user "I'm stuck on the practice problems, can't focus" → Tako momentum reply.
 
 ### 4.9 Profile
-- **BG:** bg gradient. Header: `arrow_back_rounded` + "Profile" Manrope 18 w800. List pad 20/8/20/24.
+- **BG:** bg gradient. Header: `arrow_back_rounded` + "Profile" Manrope 18 w800 + trailing `edit_rounded` 24 `#1FB6F0`. List pad 20/8/20/24.
+- **Email verification banner** (when unverified): `#FFE6DD` card, `mark_email_unread_rounded` 20 `#FF8A65` + "Verify your email to secure your account." 13 w600 + "Resend" TextButton.
 - Hero centered: avatar 88 `#FF8A65` initial Fraunces 34 white → 12 → name Fraunces 26 → email Manrope 13 w500 `#6B6B82` → 8 → mood pill `#DDF3FE` "🎯 Feeling focused" 12 w700 `#0E8FC4`.
 - Stat grid 2×2 (BentoCards, gap 12): RANK → "Pro" Fraunces 22 `#1FB6F0` · POINTS → "1240" JetBrains Mono 22 `#0E8FC4` · STREAK → "7 d" Mono 22 `#FF8A65` · SHIELDS → "2" Mono 22 `#34D399`. Labels Manrope 11 w800 `#6B6B82`.
-- Buttons (gap 12): "Session history" + "Reminders & notifications" (outline) · "Open admin portal" (filled, admin only) · "Sign out" (outline rose `#F472B6`).
+- Buttons (gap 12, all SecondaryButton outline unless noted): "Edit profile" (filled) · "Session history" · "Reminders & notifications" · "Download my data" · "Terms of Service" · "Privacy Policy" · "Open-source licenses" · "Open admin portal" (filled, admin only) · "Sign out" (outline rose `#F472B6`).
 
 ### 4.10 Settings (Reminders)
 - Header: back + "Reminders" 18 w800. Pad 20/8/20/24.
@@ -274,8 +278,43 @@ Section headers: UPPERCASE Manrope 11–12 w800 `#6B6B82`, letter-spacing 1.1.
 - Block rows: time col W 92 "09:00–09:25" JetBrains Mono 12 `#6B6B82` + card pad 12 — task: white, `bolt_rounded` 16 `#1FB6F0`; break: `#D6F5E6`, `coffee_rounded` 16 `#34D399`; title 14 w700.
 - States: loading spinner · error "Could not build a plan right now." + Retry · empty "Add some tasks first, then plan your day.".
 
-### 4.15 Admin Entry
-- Centered (pad 24): pill `#DDF3FE` "M8 · FR-11 · React on Vercel" JetBrains Mono 12 `#0E8FC4` → "Admin portal" Fraunces 26 → "Coming in this milestone." 14 w500 `#6B6B82` → SecondaryButton "Back to student app".
+### 4.15 Admin console (in-app — FR-11)
+- **Route:** `/admin` — admins land here after splash/login; students reach via Profile → "Open admin portal" or Home admin chip.
+- **BG:** bg gradient, no bottom tab bar.
+- **Header (pad 20/8/8/0):** shield icon in `#DDF3FE` 36px square radius 16 → "Admin console" 17 w800 + "Taskko · live data" 11 w600 `#6B6B82` → Spacer → `exit_to_app_rounded` 18 + "Student app" TextButton.
+- **Tab bar:** "Dashboard" · "Users" — label `#0E8FC4` selected / `#6B6B82` unselected, indicator `#1FB6F0`.
+
+#### Dashboard tab
+- **KPI grid** 2×2+1 (gap 12, aspect ~1.7): BentoCards with value Fraunces 26 + label 10.5 w800 `#6B6B82` uppercase —
+  - "42" Active today `#1FB6F0` · "8" Signups today `#FF8A65` · "31" Active streaks `#34D399` · "156" AI calls today `#0E8FC4` · "4.2" Avg tasks/user `#C7B8FF`.
+- **Rank distribution** section title 13 w800 `#2E2E3F` → BentoCard rows: rank 13 w700 + count JetBrains Mono 13 `#6B6B82` (Rookie 12 · Learner 28 · Pro 45 · Elite 8 · Legend 2).
+- **Top goals** section → BentoCard rows: `flag_rounded` 16 `#1FB6F0` + goal 13 w600 + user count mono 13 `#6B6B82` (e.g. "CS-201 midterm prep" 18).
+- **Recent activity** section → BentoCard rows: `person_add_alt_1_rounded` 16 `#34D399` + activity text 13 w600.
+
+#### Users tab
+- **Search field:** hint "Search name or email", prefix `search_rounded` 20, suffix `arrow_forward_rounded` submit.
+- **Filter chips** (horizontal scroll): All · Active · Flagged · Suspended — selected primary fill white text / unselected white + `#ECECF3` border.
+- **User rows** (BentoCard pad 12, gap 8): avatar 40 `#DDF3FE` initial 15 w800 `#0E8FC4` · name 14 w700 + email 11.5 `#6B6B82` · pills: rank `#1FB6F0` · "1240 pts" `#2E2E3F` · status (active `#34D399` / flagged `#FF8A65` / suspended `#F472B6`) · trailing `more_vert_rounded`.
+- Demo users: Sara Khan · Ali Raza · Zara Ahmed.
+
+### 4.16 Edit profile
+- **Route:** `/profile/edit`. Header: back + "Edit profile" 18 w800. Pad 20/8/20/24.
+- Center avatar 80, fill = selected mood color, initial Fraunces 30 white.
+- LabeledField "Display name" hint "Your name".
+- "Mood" 13 w700 → mood chips (emoji + label): Fired up · Focused · Chill · Drained — selected mood color @ 16% + 1.6px border.
+- PrimaryButton "Save changes".
+- Section "Account & security" 13 w800 → action tiles (white surface, 1px `#DCDCE7`, pad 16/12): `alternate_email_rounded` Change email · `lock_outline_rounded` Change password · `delete_outline_rounded` Delete account `#F472B6` + chevron right.
+
+### 4.17 Terms of Service
+- **Route:** `/terms`. Header: back + "Terms of Service" 18 w800.
+- "Last updated: 17 June 2026" 12 w600 `#6B6B82`.
+- Intro paragraph 14 w500 `#2E2E3F` lh 1.5.
+- Numbered sections (1–12): heading 15 w800 + body 14 w500 `#2E2E3F` lh 1.5 (Who can use · Your account · What Taskko does · AI content · Academic integrity · Acceptable use · Your content · Service availability · Ending your use · Limitation of liability · Changes · Contact).
+- Contact card `#DDF3FE` pad 16: "Contact" 13 w800 `#0E8FC4` + email/WhatsApp 13 w600.
+
+### 4.18 Privacy Policy
+- Same layout as Terms; title "Privacy Policy", updated 17 June 2026.
+- Sections (1–12): Who we are · Information we collect · How we use · AI processing · Where stored · Who we share · Your rights · Data retention · Children's privacy · Analytics & crash reporting · Changes · Contact.
 
 ---
 
@@ -288,7 +327,10 @@ Section headers: UPPERCASE Manrope 11–12 w800 `#6B6B82`, letter-spacing 1.1.
 `auto_awesome_rounded` `refresh_rounded` `add_rounded` `edit_outlined`
 `ios_share_rounded` `lock_rounded` `more_horiz_rounded` `arrow_upward_rounded`
 `check_circle_rounded` `cancel_rounded` `coffee_rounded` `home_rounded`
-`adjust_rounded` `cloud_off_rounded`
+`adjust_rounded` `cloud_off_rounded` `exit_to_app_rounded` `edit_rounded`
+`mark_email_unread_rounded` `search_rounded` `more_vert_rounded` `flag_rounded`
+`person_add_alt_1_rounded` `alternate_email_rounded` `lock_outline_rounded`
+`delete_outline_rounded` `chevron_right_rounded`
 
 ---
 
@@ -308,5 +350,5 @@ Section headers: UPPERCASE Manrope 11–12 w800 `#6B6B82`, letter-spacing 1.1.
 1. **Cover** — Taskko, team, course.
 2. **Foundations** — color variables (§2.1), gradients, text styles (§2.4), radii/spacing, logo + Tako mascot.
 3. **Components** — everything in §3 with variants (buttons, cards, chips, fields, tab bar, checkboxes, pills, bubbles, badges).
-4. **Screens** — 402×874 frames. Row 1: pre-auth + main tabs + profile stack. Row 2 (y=950): Quiz Input → Generating → Result · Focus Setup → Done · Hub Squad · Hub Report card. Also: Focus Running + Quiz Taking on row 1.
-5. **Prototype wiring** — splash → onboarding → signup ↔ login → home; tab bar links; Home → Quiz Input → Generating → Taking → Result; Home → Focus Setup → Running → Done; Hub tabs: Badges ↔ Squad ↔ Report card; Profile → Settings/History.
+4. **Screens** — 402×874 frames. Row 1: pre-auth + main tabs + profile stack. Row 2 (y=950): Quiz · Focus · Hub flow screens. Row 3 (y=1900): Admin Dashboard · Admin Users · Edit profile · Terms · Privacy · Plan Goal · Plan Clarify · Plan Generating.
+5. **Prototype wiring** — splash → onboarding → signup ↔ login → home (or `/admin` for admins); tab bar links; Plan Goal → Clarify → Generating → Review; Home → Quiz Input → Generating → Taking → Result; Home → Focus Setup → Running → Done; Hub tabs: Badges ↔ Squad ↔ Report card; Profile → Edit profile · Settings · History · Terms · Privacy · Admin console; Admin → Student app → Home.

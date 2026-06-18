@@ -129,9 +129,18 @@ class _Header extends StatelessWidget {
           _AdminChip(onTap: () => context.go('/admin')),
           const SizedBox(width: AppSpacing.sm),
         ],
-        _CircleIcon(icon: Icons.notifications_none_rounded, onTap: () {}),
+        _CircleIcon(
+          icon: Icons.history_rounded,
+          tooltip: 'Task & focus history',
+          onTap: () => context.push('/history'),
+        ),
         const SizedBox(width: AppSpacing.sm),
-        Material(
+        _CircleIcon(icon: Icons.notifications_none_rounded, tooltip: 'Notifications', onTap: () {}),
+        const SizedBox(width: AppSpacing.sm),
+        Semantics(
+          button: true,
+          label: 'Your profile',
+          child: Material(
           color: Colors.transparent,
           child: InkWell(
             onTap: () => context.push('/profile'),
@@ -142,6 +151,7 @@ class _Header extends StatelessWidget {
               child: Text(user.initials, style: AppTypography.ui(15, color: Colors.white, weight: FontWeight.w800)),
             ),
           ),
+        ),
         ),
       ],
     );
@@ -171,13 +181,14 @@ class _AdminChip extends StatelessWidget {
 }
 
 class _CircleIcon extends StatelessWidget {
-  const _CircleIcon({required this.icon, required this.onTap});
+  const _CircleIcon({required this.icon, required this.onTap, this.tooltip});
   final IconData icon;
   final VoidCallback onTap;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    final button = InkWell(
       onTap: onTap,
       customBorder: const CircleBorder(),
       child: Container(
@@ -187,6 +198,7 @@ class _CircleIcon extends StatelessWidget {
         child: Icon(icon, color: AppColors.ink2, size: 20),
       ),
     );
+    return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
   }
 }
 
