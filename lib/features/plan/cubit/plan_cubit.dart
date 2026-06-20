@@ -43,6 +43,30 @@ class PlanCubit extends Cubit<PlanState> {
     await _runBreakdown(goal);
   }
 
+  /// Scan a photo (syllabus / notes / whiteboard) → tasks, skipping the goal +
+  /// clarify steps and landing straight in review. Empty result (no legible
+  /// tasks) or an error returns to input with a friendly message.
+  Future<void> generateFromImage(String imageBase64, String mimeType) async {
+    emit(state.copyWith(step: PlanStep.generating, error: null, goal: 'From your photo'));
+    try {
+      final tasks = await _plan.extractTasksFromImage(imageBase64, mimeType);
+      if (tasks.isEmpty) {
+        emit(state.copyWith(
+          step: PlanStep.input,
+          error: "Tako couldn't find any tasks in that photo. Try a clearer shot.",
+        ));
+        return;
+      }
+      _breakdownGoal = 'From your photo';
+      emit(state.copyWith(step: PlanStep.review, tasks: tasks));
+    } catch (_) {
+      emit(state.copyWith(
+        step: PlanStep.input,
+        error: "Tako couldn't read that photo. Check your connection and try again.",
+      ));
+    }
+  }
+
   /// Record an answer to a clarifying question.
   void answerQuestion(String question, String answer) {
     final answers = Map<String, String>.of(state.answers)..[question] = answer;

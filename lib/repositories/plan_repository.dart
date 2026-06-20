@@ -9,4 +9,10 @@ abstract interface class PlanRepository {
 
   /// Break a (possibly enriched) goal into an ordered list of tasks.
   Future<List<PlanTask>> breakdown(String goal);
+
+  /// Extract tasks from a photo (syllabus / notes / whiteboard) via the
+  /// backend's multimodal Gemini call. [imageBase64] is the raw base64 of the
+  /// image bytes; [mimeType] e.g. `image/jpeg`. Returns an empty list if the
+  /// image yields no legible tasks.
+  Future<List<PlanTask>> extractTasksFromImage(String imageBase64, String mimeType);
 }

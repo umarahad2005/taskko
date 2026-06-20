@@ -314,6 +314,78 @@ export async function generateBreakdown(
 }
 
 // ---------------------------------------------------------------------------
+// Feature: extract-tasks (multimodal) — a photo of a syllabus / assignment
+// sheet / whiteboard / handwritten notes / timetable → an ordered task list.
+// Reuses the breakdown JSON shape + parser so the app drops straight into the
+// existing Plan-review/commit flow.
+// ---------------------------------------------------------------------------
+
+export function buildExtractTasksPrompt(): string {
+  return [
+    'The attached image is a photo from a university student — it could be a',
+    'course syllabus, an assignment brief, a lecture slide, a whiteboard, a',
+    'class timetable, or handwritten to-do notes.',
+    '',
+    'Read EVERYTHING legible in the image and turn it into an ordered, actionable',
+    'study plan the student can start today:',
+    '- Extract concrete tasks/assignments/readings/deadlines that actually appear',
+    '  in the image. Titles must be specific and reference the real subject/topic',
+    '  or item from the photo — never generic placeholders.',
+    '- If a due date or date is visible, fold it into the title (e.g. "Lab report 2 — due Fri").',
+    '- Order steps the way a student would actually tackle them.',
+    '- minutes: a realistic whole-number estimate (5–90) per step.',
+    '- points: 5–50 reflecting the effort/difficulty of that step.',
+    '- Produce 3–8 steps. If the image has no legible tasks, return an empty array [].',
+    '',
+    'Respond with ONLY a JSON array in this exact shape (no prose, no markdown fences):',
+    '[{"title": string, "minutes": number, "points": number}]',
+  ].join('\n');
+}
+
+/**
+ * Extract tasks from a base64-encoded image via Gemini's multimodal input.
+ * Mirrors generateBreakdown's robustness contract, but on failure returns an
+ * EMPTY task list with `fallback: true` (there is no sensible deterministic
+ * plan to invent from an unread photo) so the app can prompt a retry.
+ */
+export async function generateExtractTasks(
+  imageBase64: string,
+  mimeType: string,
+): Promise<{ tasks: PlanTask[]; fallback: boolean }> {
+  const dataUrl = `data:${mimeType};base64,${imageBase64}`;
+  const messages: (SystemMessage | HumanMessage)[] = [
+    new SystemMessage(`${TAKO_PERSONA}\nRespond with raw JSON only — no markdown, no commentary.`),
+    new HumanMessage({
+      content: [
+        { type: 'text', text: buildExtractTasksPrompt() },
+        { type: 'image_url', image_url: { url: dataUrl } },
+      ],
+    }),
+  ];
+
+  const started = Date.now();
+  try {
+    let raw: string;
+    try {
+      raw = await invokeModel(MODEL_PRO, messages, 6000, 0.4, true);
+    } catch (primaryErr) {
+      if (FALLBACK_PRO && FALLBACK_PRO !== MODEL_PRO) {
+        raw = await invokeModel(FALLBACK_PRO, messages, 6000, 0.4, true);
+      } else {
+        throw primaryErr;
+      }
+    }
+    const tasks = parseBreakdown(raw);
+    logUsage('extract-tasks', false, Date.now() - started);
+    return { tasks, fallback: false };
+  } catch (err) {
+    logUsage('extract-tasks', true, Date.now() - started);
+    logFailure('extract-tasks', err);
+    return { tasks: [], fallback: true };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Feature: regenerate (FR-5.5) — same contract as breakdown, different framing
 // ---------------------------------------------------------------------------
 

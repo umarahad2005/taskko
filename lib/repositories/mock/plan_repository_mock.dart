@@ -16,4 +16,10 @@ class PlanRepositoryMock implements PlanRepository {
     }
     return Seed.planReview();
   }
+
+  @override
+  Future<List<PlanTask>> extractTasksFromImage(String imageBase64, String mimeType) async {
+    await Future<void>.delayed(const Duration(milliseconds: 1400));
+    return Seed.planReview();
+  }
 }

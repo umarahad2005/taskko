@@ -32,6 +32,20 @@ class PlanRepositoryHttp implements PlanRepository {
   @override
   Future<List<PlanTask>> breakdown(String goal) async {
     final json = await _api.postJson('/api/ai/breakdown', {'goal': goal});
+    return _tasksFromJson(json);
+  }
+
+  @override
+  Future<List<PlanTask>> extractTasksFromImage(String imageBase64, String mimeType) async {
+    final json = await _api.postJson('/api/ai/extract-tasks', {
+      'imageBase64': imageBase64,
+      'mimeType': mimeType,
+    });
+    return _tasksFromJson(json);
+  }
+
+  /// Map a `{ tasks: [{title,minutes,points}] }` response into PlanTask[].
+  List<PlanTask> _tasksFromJson(Map<String, dynamic> json) {
     final raw = (json['tasks'] as List?) ?? const [];
     var i = 0;
     return raw.whereType<Map<String, dynamic>>().map((m) {

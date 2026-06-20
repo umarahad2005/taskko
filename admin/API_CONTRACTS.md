@@ -18,6 +18,7 @@ Base URL in production = the Vercel deployment origin (e.g. `https://taskko.verc
 |---|---|---|---|---|
 | POST | `/api/ai/clarify` | `{ goal: string }` | `{ questions: [{question, options[]}] }` (empty if goal is specific) | FR-5.2 |
 | POST | `/api/ai/breakdown` | `{ goal: string, availableMinutes?: number }` | `{ tasks: [{title,minutes,points}], fallback: bool }` | FR-5.3 |
+| POST | `/api/ai/extract-tasks` | `{ imageBase64: string, mimeType?: string }` (multimodal; ≤8MB body) | `{ tasks: [{title,minutes,points}], fallback: bool }` (empty `tasks` if no legible tasks) | FR-5.3 |
 | POST | `/api/ai/regenerate` | `{ goal: string, availableMinutes?: number, avoid?: string[] }` | `{ tasks: [...], fallback: bool }` | FR-5.5 |
 | POST | `/api/ai/chat` | `{ message: string, context?: UserContext }` | `{ reply: string, fallback: bool }` | FR-7.2 |
 | POST | `/api/ai/nudge` | `{ context?: UserContext }` | `{ nudge: {text, actions:[{label,action}]}, fallback: bool }` | FR-7.5 |

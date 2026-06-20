@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../repositories/plan_repository.dart';
 import '../../../repositories/tasks_repository.dart';
@@ -138,8 +141,133 @@ class _InputPhase extends StatelessWidget {
             onPressed: state.goal.trim().length < 3 ? null : cubit.generate,
           ),
         ),
+        const SizedBox(height: AppSpacing.md),
+        const _OrDivider(),
+        const SizedBox(height: AppSpacing.md),
+        _ScanPhotoButton(onTap: () => _pickAndScan(context)),
         const SizedBox(height: AppSpacing.sm),
       ],
+    );
+  }
+
+  /// Let the student pick a source, then snap/choose a photo of their syllabus,
+  /// notes or whiteboard and hand the (compressed) image to the cubit to turn
+  /// into tasks. The cubit drives the generating → review flow from here.
+  Future<void> _pickAndScan(BuildContext context) async {
+    final cubit = context.read<PlanCubit>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    final source = await _chooseSource(context);
+    if (source == null) return;
+
+    try {
+      final file = await ImagePicker().pickImage(
+        source: source,
+        maxWidth: 1600,
+        imageQuality: 70,
+      );
+      if (file == null) return;
+
+      final bytes = await file.readAsBytes();
+      final base64 = base64Encode(bytes);
+      cubit.generateFromImage(base64, _mimeFor(file));
+    } catch (_) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text("Couldn't open the photo. Please try again.")));
+    }
+  }
+
+  /// Bottom sheet to choose Camera vs Gallery; returns null if dismissed.
+  Future<ImageSource?> _chooseSource(BuildContext context) {
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetCtx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: AppSpacing.md),
+            Text('Scan a photo into tasks', style: AppTypography.ui(15, weight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            Text('Snap a syllabus, assignment sheet or whiteboard.',
+                style: AppTypography.ui(13, color: AppColors.ink3, weight: FontWeight.w500)),
+            const SizedBox(height: AppSpacing.md),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_rounded, color: AppColors.primary),
+              title: Text('Take a photo', style: AppTypography.ui(15, weight: FontWeight.w700)),
+              onTap: () => Navigator.pop(sheetCtx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded, color: AppColors.primary),
+              title: Text('Choose from gallery', style: AppTypography.ui(15, weight: FontWeight.w700)),
+              onTap: () => Navigator.pop(sheetCtx, ImageSource.gallery),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _mimeFor(XFile file) {
+    final declared = file.mimeType;
+    if (declared != null && declared.isNotEmpty) return declared;
+    final name = file.name.toLowerCase();
+    if (name.endsWith('.png')) return 'image/png';
+    if (name.endsWith('.webp')) return 'image/webp';
+    if (name.endsWith('.heic') || name.endsWith('.heif')) return 'image/heic';
+    return 'image/jpeg';
+  }
+}
+
+/// "or" separator between the type-a-goal and scan-a-photo entry points.
+class _OrDivider extends StatelessWidget {
+  const _OrDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const Expanded(child: Divider(color: AppColors.line2)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          child: Text('or', style: AppTypography.ui(12, color: AppColors.ink3, weight: FontWeight.w700)),
+        ),
+        const Expanded(child: Divider(color: AppColors.line2)),
+      ],
+    );
+  }
+}
+
+/// Secondary CTA that opens the camera/gallery picker to scan tasks from a photo.
+class _ScanPhotoButton extends StatelessWidget {
+  const _ScanPhotoButton({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: AppRadii.cardRadius,
+      child: Container(
+        height: 54,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          borderRadius: AppRadii.cardRadius,
+          color: AppColors.surface,
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.document_scanner_rounded, size: 18, color: AppColors.primary),
+          const SizedBox(width: 8),
+          Text('Scan a photo',
+              style: AppTypography.ui(15, color: AppColors.primary, weight: FontWeight.w800)),
+        ]),
+      ),
     );
   }
 }
