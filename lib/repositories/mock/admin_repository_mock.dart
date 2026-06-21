@@ -77,6 +77,72 @@ class AdminRepositoryMock implements AdminRepository {
   }
 
   @override
+  Future<AdminUser> createUser({
+    required String name,
+    required String email,
+    required String password,
+    int points = 0,
+    String plan = 'free',
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    final cleanEmail = email.trim().toLowerCase();
+    if (_users.any((u) => u.email.toLowerCase() == cleanEmail)) {
+      throw StateError('That email is already in use');
+    }
+    final user = AdminUser(
+      id: 'u-${DateTime.now().microsecondsSinceEpoch}',
+      name: name.trim().isEmpty ? cleanEmail.split('@').first : name.trim(),
+      email: email.trim(),
+      plan: plan == 'pro' ? 'pro' : 'free',
+      rank: _rankForPoints(points),
+      points: points,
+      status: 'active',
+    );
+    _users.insert(0, user);
+    return user;
+  }
+
+  @override
+  Future<AdminUser> updateUser({
+    required String userId,
+    String? name,
+    String? email,
+    int? points,
+    String? plan,
+    String? status,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    final i = _users.indexWhere((u) => u.id == userId);
+    if (i == -1) throw StateError('No such user');
+    final u = _users[i];
+    final pts = points ?? u.points;
+    final updated = AdminUser(
+      id: u.id,
+      name: name?.trim().isNotEmpty == true ? name!.trim() : u.name,
+      email: email?.trim().isNotEmpty == true ? email!.trim() : u.email,
+      plan: plan ?? u.plan,
+      rank: _rankForPoints(pts),
+      points: pts,
+      status: status ?? u.status,
+    );
+    _users[i] = updated;
+    return updated;
+  }
+
+  @override
+  Future<void> deleteUser(String userId) async {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    _users.removeWhere((u) => u.id == userId);
+  }
+
+  String _rankForPoints(int p) {
+    if (p >= 3000) return 'Legend';
+    if (p >= 1560) return 'Elite';
+    if (p >= 1000) return 'Pro';
+    return 'Rookie';
+  }
+
+  @override
   Future<List<ModerationItem>> moderationQueue({String severity = 'all'}) async {
     await Future<void>.delayed(const Duration(milliseconds: 300));
     var out = _moderation.toList();

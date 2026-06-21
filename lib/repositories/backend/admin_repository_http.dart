@@ -37,6 +37,54 @@ class AdminRepositoryHttp implements AdminRepository {
       'action': action,
       'points': ?points,
     });
+    return _userFrom(json);
+  }
+
+  @override
+  Future<AdminUser> createUser({
+    required String name,
+    required String email,
+    required String password,
+    int points = 0,
+    String plan = 'free',
+  }) async {
+    final json = await _api.postJson('/api/admin/users', {
+      'action': 'create',
+      'name': name,
+      'email': email,
+      'password': password,
+      'points': points,
+      'plan': plan,
+    });
+    return _userFrom(json);
+  }
+
+  @override
+  Future<AdminUser> updateUser({
+    required String userId,
+    String? name,
+    String? email,
+    int? points,
+    String? plan,
+    String? status,
+  }) async {
+    final json = await _api.postJson('/api/admin/users', {
+      'action': 'update',
+      'userId': userId,
+      'name': ?name,
+      'email': ?email,
+      'points': ?points,
+      'plan': ?plan,
+      'status': ?status,
+    });
+    return _userFrom(json);
+  }
+
+  @override
+  Future<void> deleteUser(String userId) =>
+      _api.postJson('/api/admin/users', {'action': 'delete', 'userId': userId});
+
+  AdminUser _userFrom(Map<String, dynamic> json) {
     final user = (json['user'] as Map?)?.cast<String, dynamic>();
     if (user == null) {
       throw StateError('Malformed response from admin users endpoint');

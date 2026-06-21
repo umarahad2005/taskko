@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../common/validators.dart';
 import '../../../common/view_status.dart';
 import '../../../models/admin_metrics.dart';
 import '../../../models/admin_settings.dart';
@@ -280,19 +281,34 @@ class _UsersTabState extends State<_UsersTab> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(AppSpacing.gutter, AppSpacing.md, AppSpacing.gutter, AppSpacing.sm),
-          child: TextField(
-            controller: _search,
-            textInputAction: TextInputAction.search,
-            onChanged: cubit.setQuery,
-            onSubmitted: (_) => cubit.loadUsers(),
-            decoration: InputDecoration(
-              hintText: 'Search name or email',
-              prefixIcon: const Icon(Icons.search_rounded, size: 20),
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.arrow_forward_rounded, size: 20),
-                onPressed: cubit.loadUsers,
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _search,
+                  textInputAction: TextInputAction.search,
+                  onChanged: cubit.setQuery,
+                  onSubmitted: (_) => cubit.loadUsers(),
+                  decoration: InputDecoration(
+                    hintText: 'Search name or email',
+                    prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.arrow_forward_rounded, size: 20),
+                      onPressed: cubit.loadUsers,
+                    ),
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: AppSpacing.sm),
+              SizedBox(
+                height: 48,
+                child: FilledButton.icon(
+                  onPressed: () => _UserFormDialog.show(context, cubit),
+                  icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+                  label: const Text('New'),
+                ),
+              ),
+            ],
           ),
         ),
         BlocBuilder<AdminCubit, AdminState>(
@@ -410,19 +426,29 @@ class _UserRow extends StatelessWidget {
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_vert_rounded, color: AppColors.ink3),
               onSelected: (v) async {
-                if (v == 'grant') {
-                  final pts = await _askPoints(context);
-                  if (pts != null) cubit.act(userId: user.id, action: 'grant_points', points: pts);
-                } else {
-                  cubit.act(userId: user.id, action: v);
+                switch (v) {
+                  case 'edit':
+                    _UserFormDialog.show(context, cubit, existing: user);
+                  case 'delete':
+                    _confirmDelete(context, cubit, user);
+                  case 'grant':
+                    final pts = await _askPoints(context);
+                    if (pts != null) cubit.act(userId: user.id, action: 'grant_points', points: pts);
+                  default:
+                    cubit.act(userId: user.id, action: v);
                 }
               },
               itemBuilder: (_) => [
+                const PopupMenuItem(value: 'edit', child: _MenuRow(icon: Icons.edit_outlined, label: 'Edit user…')),
                 if (user.isSuspended)
-                  const PopupMenuItem(value: 'reinstate', child: Text('Reinstate'))
+                  const PopupMenuItem(value: 'reinstate', child: _MenuRow(icon: Icons.play_arrow_rounded, label: 'Reinstate'))
                 else
-                  const PopupMenuItem(value: 'suspend', child: Text('Suspend')),
-                const PopupMenuItem(value: 'grant', child: Text('Grant points…')),
+                  const PopupMenuItem(value: 'suspend', child: _MenuRow(icon: Icons.block_rounded, label: 'Suspend')),
+                const PopupMenuItem(value: 'grant', child: _MenuRow(icon: Icons.add_circle_outline_rounded, label: 'Grant points…')),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: _MenuRow(icon: Icons.delete_outline_rounded, label: 'Delete', color: AppColors.rose),
+                ),
               ],
             ),
         ],
@@ -460,6 +486,228 @@ class _Pill extends StatelessWidget {
       decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: AppRadii.pillRadius),
       child: Text(text,
           style: AppTypography.ui(10.5, color: color == AppColors.ink3 ? AppColors.ink2 : color, weight: FontWeight.w700)),
+    );
+  }
+}
+
+/// Icon + label row for the user actions popup menu.
+class _MenuRow extends StatelessWidget {
+  const _MenuRow({required this.icon, required this.label, this.color});
+  final IconData icon;
+  final String label;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = color ?? AppColors.ink2;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 18, color: c),
+        const SizedBox(width: AppSpacing.sm),
+        Text(label, style: AppTypography.ui(13.5, color: c, weight: FontWeight.w600)),
+      ],
+    );
+  }
+}
+
+/// Confirm + run a permanent user deletion (CRUD — delete).
+Future<void> _confirmDelete(BuildContext context, AdminCubit cubit, AdminUser user) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Delete user?'),
+      content: Text('Permanently delete ${user.name} (${user.email})? This cannot be undone.',
+          style: AppTypography.ui(13.5, color: AppColors.ink2, weight: FontWeight.w500)),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: AppColors.rose),
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+  if (ok != true) return;
+  final success = await cubit.deleteUser(user.id);
+  if (success) {
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text('Deleted ${user.name}')));
+  }
+  // On failure the Users tab listener surfaces the error.
+}
+
+/// Create / edit user form (CRUD — create + update). Passed the [AdminCubit]
+/// directly so it works from the dialog's detached context.
+class _UserFormDialog extends StatefulWidget {
+  const _UserFormDialog({required this.cubit, this.existing});
+  final AdminCubit cubit;
+  final AdminUser? existing;
+
+  static void show(BuildContext context, AdminCubit cubit, {AdminUser? existing}) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => _UserFormDialog(cubit: cubit, existing: existing),
+    );
+  }
+
+  @override
+  State<_UserFormDialog> createState() => _UserFormDialogState();
+}
+
+class _UserFormDialogState extends State<_UserFormDialog> {
+  late final TextEditingController _name = TextEditingController(text: widget.existing?.name ?? '');
+  late final TextEditingController _email = TextEditingController(text: widget.existing?.email ?? '');
+  final TextEditingController _password = TextEditingController();
+  late final TextEditingController _points =
+      TextEditingController(text: '${widget.existing?.points ?? 0}');
+  late bool _pro = widget.existing?.plan == 'pro';
+  late String _status = widget.existing?.status ?? 'active';
+  bool _busy = false;
+  String? _error;
+
+  bool get _isEdit => widget.existing != null;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _email.dispose();
+    _password.dispose();
+    _points.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final email = _email.text.trim();
+    final emailErr = Validators.email(email);
+    if (emailErr != null) {
+      setState(() => _error = emailErr);
+      return;
+    }
+    if (!_isEdit && _password.text.length < 6) {
+      setState(() => _error = 'Password must be at least 6 characters');
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final points = int.tryParse(_points.text.trim()) ?? 0;
+    final plan = _pro ? 'pro' : 'free';
+    final ok = _isEdit
+        ? await widget.cubit.updateUser(
+            userId: widget.existing!.id,
+            name: _name.text.trim(),
+            email: email,
+            points: points,
+            plan: plan,
+            status: _status,
+          )
+        : await widget.cubit.createUser(
+            name: _name.text.trim(),
+            email: email,
+            password: _password.text,
+            points: points,
+            plan: plan,
+          );
+    if (!mounted) return;
+    if (ok) {
+      Navigator.of(context).pop();
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(_isEdit ? 'User updated' : 'User created')));
+    } else {
+      setState(() {
+        _busy = false;
+        _error = widget.cubit.state.error ?? 'Something went wrong. Please try again.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(_isEdit ? 'Edit user' : 'New user'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _field(_name, 'Name'),
+            const SizedBox(height: AppSpacing.sm),
+            _field(_email, 'Email', email: true),
+            if (!_isEdit) ...[
+              const SizedBox(height: AppSpacing.sm),
+              _field(_password, 'Password (min 6 chars)', obscure: true),
+            ],
+            const SizedBox(height: AppSpacing.sm),
+            _field(_points, 'Points', number: true),
+            const SizedBox(height: AppSpacing.md),
+            Text('Plan', style: AppTypography.ui(12, color: AppColors.ink3, weight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              children: [
+                for (final p in const ['free', 'pro'])
+                  ChoiceChip(
+                    label: Text(p == 'pro' ? 'Pro' : 'Free'),
+                    selected: (_pro ? 'pro' : 'free') == p,
+                    onSelected: (_) => setState(() => _pro = p == 'pro'),
+                  ),
+              ],
+            ),
+            if (_isEdit) ...[
+              const SizedBox(height: AppSpacing.md),
+              Text('Status', style: AppTypography.ui(12, color: AppColors.ink3, weight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final s in const ['active', 'flagged', 'suspended'])
+                    ChoiceChip(
+                      label: Text(s[0].toUpperCase() + s.substring(1)),
+                      selected: _status == s,
+                      onSelected: (_) => setState(() => _status = s),
+                    ),
+                ],
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              Text(_error!, style: AppTypography.ui(12, color: AppColors.rose, weight: FontWeight.w600)),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _busy ? null : _submit,
+          child: _busy
+              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : Text(_isEdit ? 'Save' : 'Create'),
+        ),
+      ],
+    );
+  }
+
+  Widget _field(TextEditingController c, String label, {bool obscure = false, bool email = false, bool number = false}) {
+    return TextField(
+      controller: c,
+      obscureText: obscure,
+      keyboardType: email
+          ? TextInputType.emailAddress
+          : number
+              ? TextInputType.number
+              : null,
+      decoration: InputDecoration(labelText: label, isDense: true),
     );
   }
 }

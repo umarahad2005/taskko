@@ -58,6 +58,65 @@ class AdminCubit extends Cubit<AdminState> {
     }
   }
 
+  /// Create a user and prepend it to the list. Returns true on success so the
+  /// caller (a dialog) can close itself; throws are surfaced via [state.error].
+  Future<bool> createUser({
+    required String name,
+    required String email,
+    required String password,
+    int points = 0,
+    String plan = 'free',
+  }) async {
+    try {
+      final created = await _repo.createUser(
+          name: name, email: email, password: password, points: points, plan: plan);
+      emit(state.copyWith(users: [created, ...state.users]));
+      return true;
+    } catch (e) {
+      emit(state.copyWith(error: _message(e)));
+      return false;
+    }
+  }
+
+  /// Update a user in place. Returns true on success.
+  Future<bool> updateUser({
+    required String userId,
+    String? name,
+    String? email,
+    int? points,
+    String? plan,
+    String? status,
+  }) async {
+    emit(state.copyWith(busyUserId: userId, error: null));
+    try {
+      final updated = await _repo.updateUser(
+          userId: userId, name: name, email: email, points: points, plan: plan, status: status);
+      final users = state.users.map((u) => u.id == updated.id ? updated : u).toList();
+      emit(state.copyWith(users: users, clearBusy: true));
+      return true;
+    } catch (e) {
+      emit(state.copyWith(error: _message(e), clearBusy: true));
+      return false;
+    }
+  }
+
+  /// Permanently delete a user and drop it from the list. Returns true on success.
+  Future<bool> deleteUser(String userId) async {
+    emit(state.copyWith(busyUserId: userId, error: null));
+    try {
+      await _repo.deleteUser(userId);
+      emit(state.copyWith(users: state.users.where((u) => u.id != userId).toList(), clearBusy: true));
+      return true;
+    } catch (e) {
+      emit(state.copyWith(error: _message(e), clearBusy: true));
+      return false;
+    }
+  }
+
+  /// Strip the `Exception:`/`StateError:` prefix Dart adds to `toString()`.
+  String _message(Object e) =>
+      e.toString().replaceFirst(RegExp(r'^(Exception|StateError|Bad state):\s*'), '');
+
   // --- Moderation ---------------------------------------------------------
   Future<void> loadModeration() async {
     emit(state.copyWith(moderationStatus: ViewStatus.loading, error: null));

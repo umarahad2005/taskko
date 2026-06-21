@@ -17,6 +17,29 @@ abstract interface class AdminRepository {
   /// action: 'suspend' | 'reinstate' | 'grant_points' (points required for grant).
   Future<AdminUser> userAction({required String userId, required String action, int? points});
 
+  /// Create a new user account (Auth + Firestore profile); returns the new row.
+  Future<AdminUser> createUser({
+    required String name,
+    required String email,
+    required String password,
+    int points = 0,
+    String plan = 'free',
+  });
+
+  /// Update an existing user's profile/identity; returns the updated row. Only
+  /// the non-null fields are changed. `status`: 'active' | 'flagged' | 'suspended'.
+  Future<AdminUser> updateUser({
+    required String userId,
+    String? name,
+    String? email,
+    int? points,
+    String? plan,
+    String? status,
+  });
+
+  /// Permanently delete a user account (Auth + Firestore profile).
+  Future<void> deleteUser(String userId);
+
   /// Moderation queue, filtered by severity ('all'|'low'|'medium'|'high') (FR-11.5).
   Future<List<ModerationItem>> moderationQueue({String severity = 'all'});
 
