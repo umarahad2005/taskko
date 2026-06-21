@@ -36,7 +36,12 @@ abstract interface class AuthRepository {
   /// Permanently delete the signed-in account (re-authenticates first). Pass
   /// [currentPassword] for password accounts; Google-only accounts re-auth
   /// interactively, so it may be omitted.
-  Future<void> deleteAccount({String? currentPassword});
+  ///
+  /// [onReauthenticated] runs after re-authentication succeeds but before the
+  /// account is removed — i.e. while the user is still signed in — so callers
+  /// can wipe owned data (e.g. Tako chat history) that Firestore rules would
+  /// block once the account is gone. If it throws, deletion is aborted.
+  Future<void> deleteAccount({String? currentPassword, Future<void> Function()? onReauthenticated});
 }
 
 /// Thrown when the user dismisses a provider sheet (e.g. closes the Google

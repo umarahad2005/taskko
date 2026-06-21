@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../models/clarify_question.dart';
 import '../../../repositories/plan_repository.dart';
 import '../../../repositories/tasks_repository.dart';
 import '../../../theme/app_colors.dart';
@@ -429,31 +430,11 @@ class _ClarifyPhase extends StatelessWidget {
             separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.lg),
             itemBuilder: (context, i) {
               final q = state.questions[i];
-              final selected = state.answers[q.question];
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(q.question, style: AppTypography.ui(15, weight: FontWeight.w700)),
-                  const SizedBox(height: AppSpacing.sm),
-                  if (q.options.isNotEmpty)
-                    Wrap(
-                      spacing: AppSpacing.sm,
-                      runSpacing: AppSpacing.sm,
-                      children: [
-                        for (final o in q.options)
-                          _ClarifyChip(
-                            label: o,
-                            selected: selected == o,
-                            onTap: () => cubit.answerQuestion(q.question, o),
-                          ),
-                      ],
-                    )
-                  else
-                    TextField(
-                      decoration: const InputDecoration(hintText: 'Your answer'),
-                      onChanged: (v) => cubit.answerQuestion(q.question, v),
-                    ),
-                ],
+              return _ClarifyQuestionTile(
+                key: ValueKey(q.question),
+                question: q,
+                answer: state.answers[q.question],
+                onAnswer: (v) => cubit.answerQuestion(q.question, v),
               );
             },
           ),
@@ -473,14 +454,115 @@ class _ClarifyPhase extends StatelessWidget {
   }
 }
 
-class _ClarifyChip extends StatelessWidget {
-  const _ClarifyChip({required this.label, required this.selected, required this.onTap});
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
+/// One clarifying question: option chips plus an "Other…" escape hatch that
+/// reveals a free-text field, so the student can answer manually when none of
+/// Tako's options fit (SRS FR-5.2). Questions with no options are text-only.
+class _ClarifyQuestionTile extends StatefulWidget {
+  const _ClarifyQuestionTile({
+    super.key,
+    required this.question,
+    required this.answer,
+    required this.onAnswer,
+  });
+
+  final ClarifyQuestion question;
+  final String? answer;
+  final ValueChanged<String> onAnswer;
+
+  @override
+  State<_ClarifyQuestionTile> createState() => _ClarifyQuestionTileState();
+}
+
+class _ClarifyQuestionTileState extends State<_ClarifyQuestionTile> {
+  late final TextEditingController _custom;
+  final FocusNode _focus = FocusNode();
+  late bool _customMode;
+
+  @override
+  void initState() {
+    super.initState();
+    final ans = widget.answer;
+    // Pre-select "Other" if a previous answer was typed (not one of the options),
+    // or if the question has no options to choose from.
+    final isCustom = ans != null && ans.isNotEmpty && !widget.question.options.contains(ans);
+    _customMode = widget.question.options.isEmpty || isCustom;
+    _custom = TextEditingController(text: isCustom ? ans : '');
+  }
+
+  @override
+  void dispose() {
+    _custom.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  void _selectOption(String option) {
+    setState(() => _customMode = false);
+    widget.onAnswer(option);
+  }
+
+  void _enterCustomMode() {
+    setState(() => _customMode = true);
+    final text = _custom.text.trim();
+    if (text.isNotEmpty) widget.onAnswer(text);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
+  }
 
   @override
   Widget build(BuildContext context) {
+    final q = widget.question;
+    final hasOptions = q.options.isNotEmpty;
+    final selected = widget.answer;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(q.question, style: AppTypography.ui(15, weight: FontWeight.w700)),
+        const SizedBox(height: AppSpacing.sm),
+        if (hasOptions)
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              for (final o in q.options)
+                _ClarifyChip(
+                  label: o,
+                  selected: !_customMode && selected == o,
+                  onTap: () => _selectOption(o),
+                ),
+              _ClarifyChip(
+                label: 'Other…',
+                icon: Icons.edit_rounded,
+                selected: _customMode,
+                onTap: _enterCustomMode,
+              ),
+            ],
+          ),
+        if (_customMode) ...[
+          if (hasOptions) const SizedBox(height: AppSpacing.sm),
+          TextField(
+            controller: _custom,
+            focusNode: _focus,
+            decoration: InputDecoration(
+              hintText: hasOptions ? 'Type your own answer' : 'Your answer',
+            ),
+            onChanged: (v) => widget.onAnswer(v.trim()),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ClarifyChip extends StatelessWidget {
+  const _ClarifyChip({required this.label, required this.selected, required this.onTap, this.icon});
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = selected ? Colors.white : AppColors.ink2;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -490,8 +572,16 @@ class _ClarifyChip extends StatelessWidget {
           borderRadius: AppRadii.pillRadius,
           border: Border.all(color: selected ? AppColors.primary : AppColors.line2),
         ),
-        child: Text(label,
-            style: AppTypography.ui(13, color: selected ? Colors.white : AppColors.ink2, weight: FontWeight.w600)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 14, color: fg),
+              const SizedBox(width: 4),
+            ],
+            Text(label, style: AppTypography.ui(13, color: fg, weight: FontWeight.w600)),
+          ],
+        ),
       ),
     );
   }

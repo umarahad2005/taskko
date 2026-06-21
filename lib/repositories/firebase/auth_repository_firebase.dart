@@ -212,7 +212,7 @@ class FirebaseAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<void> deleteAccount({String? currentPassword}) async {
+  Future<void> deleteAccount({String? currentPassword, Future<void> Function()? onReauthenticated}) async {
     // Re-authenticate with whatever credential the account actually has: a
     // password if one was supplied, otherwise the native Google picker.
     final User user;
@@ -224,6 +224,9 @@ class FirebaseAuthRepository implements AuthRepository {
       // No credential available — surface a clear password error.
       user = await _reauth(currentPassword ?? '');
     }
+    // Wipe owned data while still signed in (Firestore rules block this once the
+    // account is gone). Abort the deletion if cleanup fails.
+    await onReauthenticated?.call();
     try {
       await user.delete();
     } on FirebaseAuthException catch (e) {

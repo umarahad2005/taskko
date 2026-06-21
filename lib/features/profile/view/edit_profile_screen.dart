@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../models/app_user.dart';
 import '../../../models/mood.dart';
 import '../../../repositories/auth_repository.dart';
+import '../../../repositories/chat_history_repository.dart';
 import '../../../repositories/gamification_repository.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_radii.dart';
@@ -191,16 +192,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _deleteAccount(bool hasPassword) async {
+    final auth = context.read<AuthRepository>();
+    final chatHistory = context.read<ChatHistoryRepository>();
+    // Wipe the user's Tako chat history as part of the deletion, while still
+    // signed in (Firestore rules block it once the account is gone).
+    Future<void> cleanup() => chatHistory.clearAll();
+
     final bool ok;
     if (hasPassword) {
       final pass = TextEditingController();
       ok = await _showCredDialog(
         title: 'Delete account?',
-        message: 'This permanently deletes your account. This cannot be undone.',
+        message: 'This permanently deletes your account and your Tako chat history. '
+            'This cannot be undone.',
         submitLabel: 'Delete forever',
         destructive: true,
         fields: [_Field('Confirm password', pass, obscure: true)],
-        action: () => context.read<AuthRepository>().deleteAccount(currentPassword: pass.text),
+        action: () => auth.deleteAccount(currentPassword: pass.text, onReauthenticated: cleanup),
       );
       pass.dispose();
     } else {
@@ -208,16 +216,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       // deleteAccount(), so no password field is needed here.
       ok = await _showCredDialog(
         title: 'Delete account?',
-        message: 'This permanently deletes your account. This cannot be undone. '
-            "You'll be asked to confirm with Google.",
+        message: 'This permanently deletes your account and your Tako chat history. '
+            "This cannot be undone. You'll be asked to confirm with Google.",
         submitLabel: 'Delete forever',
         destructive: true,
         fields: const [],
-        action: () => context.read<AuthRepository>().deleteAccount(),
+        action: () => auth.deleteAccount(onReauthenticated: cleanup),
       );
     }
     if (ok && mounted) {
-      _snack('Your account has been deleted.');
+      _snack('Your account and chat history have been deleted.');
       context.go('/login');
     }
   }

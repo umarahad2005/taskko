@@ -38,4 +38,10 @@ class ChatHistoryRepositoryMock implements ChatHistoryRepository {
     _store.remove(sessionId);
     _meta.remove(sessionId);
   }
+
+  @override
+  Future<void> clearAll() async {
+    _store.clear();
+    _meta.clear();
+  }
 }

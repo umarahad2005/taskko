@@ -9,15 +9,67 @@ import '../../../widgets/primary_button.dart';
 import '../cubit/plan_cubit.dart';
 
 /// Three-step progress header: Goal · Break down · Customize (SRS FR-5.1).
-class PlanStepIndicator extends StatelessWidget {
+///
+/// The flow has four states (input → clarify → generating → review) but only
+/// three visible stages, so they're mapped on: input/clarify = Goal, generating
+/// = Break down, review = Customize. The active bar is driven by an explicit
+/// [AnimationController] — it fills left-to-right when a step settles and pulses
+/// while Tako is working — so the header tracks the real work instead of jumping
+/// straight to full.
+class PlanStepIndicator extends StatefulWidget {
   const PlanStepIndicator({super.key, required this.step});
   final PlanStep step;
 
+  @override
+  State<PlanStepIndicator> createState() => _PlanStepIndicatorState();
+}
+
+class _PlanStepIndicatorState extends State<PlanStepIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 850));
+
   static const _labels = ['Goal', 'Break down', 'Customize'];
+
+  int get _active => switch (widget.step) {
+        PlanStep.input || PlanStep.clarify => 0,
+        PlanStep.generating => 1,
+        PlanStep.review => 2,
+      };
+
+  bool get _working => widget.step == PlanStep.generating;
+
+  @override
+  void initState() {
+    super.initState();
+    _drive();
+  }
+
+  @override
+  void didUpdateWidget(PlanStepIndicator old) {
+    super.didUpdateWidget(old);
+    if (old.step != widget.step) _drive();
+  }
+
+  /// While Tako is working, the active bar pulses (indeterminate); on a settled
+  /// step it fills once, left to right, then holds.
+  void _drive() {
+    if (_working) {
+      _c.repeat(reverse: true);
+    } else {
+      _c.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final current = step.index;
+    final active = _active;
     return Row(
       children: [
         for (var i = 0; i < 3; i++) ...[
@@ -25,18 +77,19 @@ class PlanStepIndicator extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: i <= current ? AppColors.primary : AppColors.line2,
-                    borderRadius: BorderRadius.circular(99),
-                  ),
+                _StepBar(
+                  controller: _c,
+                  done: i < active,
+                  active: i == active,
+                  working: i == active && _working,
                 ),
                 const SizedBox(height: 6),
-                Text(
-                  _labels[i],
+                AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 250),
                   style: AppTypography.ui(11,
-                      color: i <= current ? AppColors.primaryDeep : AppColors.ink4, weight: FontWeight.w700),
+                      color: i <= active ? AppColors.primaryDeep : AppColors.ink4,
+                      weight: FontWeight.w700),
+                  child: Text(_labels[i]),
                 ),
               ],
             ),
@@ -44,6 +97,55 @@ class PlanStepIndicator extends StatelessWidget {
           if (i < 2) const SizedBox(width: AppSpacing.sm),
         ],
       ],
+    );
+  }
+}
+
+/// One segment of [PlanStepIndicator]. Past stages are solid; the active stage
+/// animates its fill from the shared [controller].
+class _StepBar extends StatelessWidget {
+  const _StepBar({
+    required this.controller,
+    required this.done,
+    required this.active,
+    required this.working,
+  });
+
+  final AnimationController controller;
+  final bool done;
+  final bool active;
+  final bool working;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(99),
+      child: SizedBox(
+        height: 4,
+        child: Stack(
+          children: [
+            const Positioned.fill(child: ColoredBox(color: AppColors.line2)),
+            if (done)
+              const Positioned.fill(child: ColoredBox(color: AppColors.primary))
+            else if (active)
+              AnimatedBuilder(
+                animation: controller,
+                builder: (context, _) {
+                  // Working: oscillate 25%→100% (pulse). Settled: fill 0→100% once.
+                  final fill = working ? 0.25 + controller.value * 0.75 : controller.value;
+                  return Align(
+                    alignment: Alignment.centerLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: fill.clamp(0.0, 1.0),
+                      heightFactor: 1,
+                      child: const ColoredBox(color: AppColors.primary),
+                    ),
+                  );
+                },
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -99,8 +99,9 @@ class AuthRepositoryMock implements AuthRepository {
   }
 
   @override
-  Future<void> deleteAccount({String? currentPassword}) async {
+  Future<void> deleteAccount({String? currentPassword, Future<void> Function()? onReauthenticated}) async {
     await Future<void>.delayed(_latency);
+    await onReauthenticated?.call();
     _emit(null);
   }
 

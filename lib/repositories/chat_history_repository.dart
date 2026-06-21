@@ -16,4 +16,8 @@ abstract interface class ChatHistoryRepository {
 
   /// Delete a session and all its messages.
   Future<void> deleteSession(String sessionId);
+
+  /// Delete every chat session (and its messages) for the signed-in user.
+  /// Used when deleting the account so no orphaned Tako history remains.
+  Future<void> clearAll();
 }

@@ -75,4 +75,19 @@ class ChatHistoryRepositoryFirestore implements ChatHistoryRepository {
     }
     await _col.doc(sessionId).delete();
   }
+
+  @override
+  Future<void> clearAll() async {
+    // No signed-in user → nothing to clear (avoids a null-uid crash if called
+    // right after sign-out).
+    if (_auth.currentUser == null) return;
+    final sessions = await _col.get();
+    for (final session in sessions.docs) {
+      final msgs = await session.reference.collection('messages').get();
+      for (final m in msgs.docs) {
+        await m.reference.delete();
+      }
+      await session.reference.delete();
+    }
+  }
 }
