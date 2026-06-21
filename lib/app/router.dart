@@ -5,6 +5,7 @@ import '../features/admin/view/admin_panel_screen.dart';
 import '../features/focus/view/focus_timer_screen.dart';
 import '../features/auth/view/login_screen.dart';
 import '../features/auth/view/signup_screen.dart';
+import '../features/auth/view/verify_email_screen.dart';
 import '../features/chat/view/chat_screen.dart';
 import '../features/history/view/history_screen.dart';
 import '../features/home/view/home_screen.dart';
@@ -28,6 +29,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(path: '/onboarding', builder: (_, _) => const OnboardingScreen()),
     GoRoute(path: '/signup', builder: (_, _) => const SignUpScreen()),
     GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
+    GoRoute(path: '/verify-email', builder: (_, _) => const VerifyEmailScreen()),
     GoRoute(path: '/home', builder: (_, _) => const HomeScreen()),
     GoRoute(path: '/plan', builder: (_, _) => const PlanScreen()),
     GoRoute(path: '/hub', builder: (_, _) => const HubScreen()),

@@ -4,7 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../common/view_status.dart';
 import '../../../models/admin_metrics.dart';
+import '../../../models/admin_settings.dart';
 import '../../../models/admin_user.dart';
+import '../../../models/ai_insights.dart';
+import '../../../models/moderation_item.dart';
 import '../../../repositories/admin_repository.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_radii.dart';
@@ -34,7 +37,7 @@ class _AdminPanelView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 5,
       child: Scaffold(
         body: DecoratedBox(
           decoration: const BoxDecoration(gradient: AppColors.bgGradient),
@@ -68,13 +71,27 @@ class _AdminPanelView extends StatelessWidget {
                   ),
                 ),
                 const TabBar(
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
                   labelColor: AppColors.primaryDeep,
                   unselectedLabelColor: AppColors.ink3,
                   indicatorColor: AppColors.primary,
-                  tabs: [Tab(text: 'Dashboard'), Tab(text: 'Users')],
+                  tabs: [
+                    Tab(text: 'Dashboard'),
+                    Tab(text: 'Users'),
+                    Tab(text: 'Moderation'),
+                    Tab(text: 'AI insights'),
+                    Tab(text: 'Settings'),
+                  ],
                 ),
                 const Expanded(
-                  child: TabBarView(children: [_DashboardTab(), _UsersTab()]),
+                  child: TabBarView(children: [
+                    _DashboardTab(),
+                    _UsersTab(),
+                    _ModerationTab(),
+                    _AiInsightsTab(),
+                    _SettingsTab(),
+                  ]),
                 ),
               ],
             ),
@@ -443,6 +460,496 @@ class _Pill extends StatelessWidget {
       decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: AppRadii.pillRadius),
       child: Text(text,
           style: AppTypography.ui(10.5, color: color == AppColors.ink3 ? AppColors.ink2 : color, weight: FontWeight.w700)),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Moderation (FR-11.5)
+// ---------------------------------------------------------------------------
+
+class _ModerationTab extends StatefulWidget {
+  const _ModerationTab();
+
+  @override
+  State<_ModerationTab> createState() => _ModerationTabState();
+}
+
+class _ModerationTabState extends State<_ModerationTab> {
+  static const _filters = ['all', 'high', 'medium', 'low'];
+
+  @override
+  void initState() {
+    super.initState();
+    final cubit = context.read<AdminCubit>();
+    if (cubit.state.moderationStatus == ViewStatus.initial) cubit.loadModeration();
+  }
+
+  static Color _tone(String severity) => switch (severity) {
+        'high' => AppColors.energy,
+        'medium' => AppColors.gold,
+        _ => AppColors.mint,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final cubit = context.read<AdminCubit>();
+    return Column(
+      children: [
+        BlocBuilder<AdminCubit, AdminState>(
+          buildWhen: (a, b) => a.severity != b.severity,
+          builder: (context, state) => SizedBox(
+            height: 52,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(AppSpacing.gutter, AppSpacing.sm, AppSpacing.gutter, AppSpacing.sm),
+              children: [
+                for (final f in _filters)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(f[0].toUpperCase() + f.substring(1)),
+                      selected: state.severity == f,
+                      onSelected: (_) => cubit.setSeverity(f),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        Expanded(
+          child: BlocConsumer<AdminCubit, AdminState>(
+            listenWhen: (a, b) => a.error != b.error && b.error != null,
+            listener: (context, state) {
+              ScaffoldMessenger.of(context)
+                ..hideCurrentSnackBar()
+                ..showSnackBar(SnackBar(content: Text(state.error!)));
+            },
+            buildWhen: (a, b) =>
+                a.moderationStatus != b.moderationStatus ||
+                a.moderation != b.moderation ||
+                a.busyModId != b.busyModId,
+            builder: (context, state) {
+              if (state.moderationStatus.isLoading || state.moderationStatus == ViewStatus.initial) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (state.moderationStatus.isFailure) {
+                return _ErrorState(
+                  message: state.error ?? 'Could not load the moderation queue',
+                  onRetry: cubit.loadModeration,
+                );
+              }
+              if (state.moderation.isEmpty) {
+                return Center(
+                  child: Text('Queue is clear — nothing to review.',
+                      style: AppTypography.ui(14, color: AppColors.ink3)),
+                );
+              }
+              return RefreshIndicator(
+                onRefresh: cubit.loadModeration,
+                child: ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(AppSpacing.gutter, AppSpacing.sm, AppSpacing.gutter, AppSpacing.xxl),
+                  itemCount: state.moderation.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
+                  itemBuilder: (context, i) => _ModRow(
+                    item: state.moderation[i],
+                    busy: state.busyModId == state.moderation[i].id,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ModRow extends StatelessWidget {
+  const _ModRow({required this.item, required this.busy});
+  final ModerationItem item;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    final cubit = context.read<AdminCubit>();
+    final tone = _ModerationTabState._tone(item.severity);
+    return BentoCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(color: tone.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(AppRadii.sm)),
+                child: Icon(Icons.flag_rounded, size: 18, color: tone),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              _Pill(text: item.severity, color: tone),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text('target ${item.targetUser}',
+                    style: AppTypography.ui(11.5, color: AppColors.ink3), maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+              if (!item.isOpen) _Pill(text: item.status, color: AppColors.ink3),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(item.reason, style: AppTypography.ui(13.5, weight: FontWeight.w700)),
+          if (item.isOpen) ...[
+            const SizedBox(height: AppSpacing.md),
+            busy
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 4),
+                    child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                  )
+                : Row(
+                    children: [
+                      _ModBtn(label: 'Dismiss', color: AppColors.mint, filled: true, onTap: () => cubit.moderate(itemId: item.id, action: 'dismiss')),
+                      const SizedBox(width: 6),
+                      _ModBtn(label: 'Warn', color: AppColors.ink3, onTap: () => cubit.moderate(itemId: item.id, action: 'warn')),
+                      const SizedBox(width: 6),
+                      _ModBtn(label: 'Suspend', color: AppColors.energy, onTap: () => cubit.moderate(itemId: item.id, action: 'suspend')),
+                    ],
+                  ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ModBtn extends StatelessWidget {
+  const _ModBtn({required this.label, required this.color, required this.onTap, this.filled = false});
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadii.sm),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: filled ? color : color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(AppRadii.sm),
+            border: filled ? null : Border.all(color: color.withValues(alpha: 0.5)),
+          ),
+          child: Text(label,
+              style: AppTypography.ui(12, color: filled ? Colors.white : color, weight: FontWeight.w700)),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// AI insights (FR-11.6)
+// ---------------------------------------------------------------------------
+
+class _AiInsightsTab extends StatefulWidget {
+  const _AiInsightsTab();
+
+  @override
+  State<_AiInsightsTab> createState() => _AiInsightsTabState();
+}
+
+class _AiInsightsTabState extends State<_AiInsightsTab> {
+  @override
+  void initState() {
+    super.initState();
+    final cubit = context.read<AdminCubit>();
+    if (cubit.state.aiStatus == ViewStatus.initial) cubit.loadAiInsights();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<AdminCubit, AdminState>(
+      buildWhen: (a, b) => a.aiStatus != b.aiStatus || a.ai != b.ai,
+      builder: (context, state) {
+        if (state.aiStatus.isLoading || state.aiStatus == ViewStatus.initial) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (state.aiStatus.isFailure || state.ai == null) {
+          return _ErrorState(
+            message: state.error ?? 'Could not load AI insights',
+            onRetry: () => context.read<AdminCubit>().loadAiInsights(),
+          );
+        }
+        final ai = state.ai!;
+        final kpis = <(String, String, Color)>[
+          ('Calls today', '${ai.callsToday}', AppColors.primary),
+          ('Calls (7d)', '${ai.calls7d}', AppColors.primary2),
+          ('Avg latency', '${(ai.avgLatencyMs / 1000).toStringAsFixed(2)}s', AppColors.mint),
+          ('Fallback rate', '${(ai.fallbackRate * 100).toStringAsFixed(1)}%', AppColors.energy),
+        ];
+        return RefreshIndicator(
+          onRefresh: () => context.read<AdminCubit>().loadAiInsights(),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.gutter, AppSpacing.md, AppSpacing.gutter, AppSpacing.xxl),
+            children: [
+              GridView.count(
+                crossAxisCount: 2,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                mainAxisSpacing: AppSpacing.md,
+                crossAxisSpacing: AppSpacing.md,
+                childAspectRatio: 1.7,
+                children: [for (final k in kpis) _KpiCard(label: k.$1, value: k.$2, color: k.$3)],
+              ),
+              if (ai.quality.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.lg),
+                _SectionTitle('Tako quality by feature'),
+                const SizedBox(height: AppSpacing.sm),
+                BentoCard(
+                  child: Column(
+                    children: [for (final q in ai.quality) _QualityBar(q)],
+                  ),
+                ),
+              ],
+              if (ai.stuckPhrases.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.lg),
+                _SectionTitle('Where students get stuck'),
+                const SizedBox(height: AppSpacing.sm),
+                BentoCard(
+                  child: Column(
+                    children: [
+                      for (final p in ai.stuckPhrases)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.help_outline_rounded, size: 16, color: AppColors.energy),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text('"$p"', style: AppTypography.ui(13, weight: FontWeight.w600))),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+              if (ai.recentPrompts.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.lg),
+                _SectionTitle('Recent prompts'),
+                const SizedBox(height: AppSpacing.sm),
+                BentoCard(
+                  child: Column(
+                    children: [
+                      for (final p in ai.recentPrompts)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _Pill(text: p.feature, color: AppColors.primary),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text(p.label, style: AppTypography.ui(13, weight: FontWeight.w600))),
+                              if (p.at != null)
+                                Text(p.at!, style: AppTypography.ui(10.5, color: AppColors.ink4)),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _QualityBar extends StatelessWidget {
+  const _QualityBar(this.q);
+  final AiQuality q;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text(q.feature, style: AppTypography.ui(12.5, weight: FontWeight.w700))),
+              Text('${(q.good * 100).round()}% good · ${(q.fallback * 100).round()}% fallback',
+                  style: AppTypography.mono(11, color: AppColors.ink3)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              value: q.good.clamp(0, 1),
+              minHeight: 7,
+              backgroundColor: AppColors.line,
+              color: AppColors.mint,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Settings — feature flags + admin team (FR-11.8)
+// ---------------------------------------------------------------------------
+
+class _SettingsTab extends StatefulWidget {
+  const _SettingsTab();
+
+  @override
+  State<_SettingsTab> createState() => _SettingsTabState();
+}
+
+class _SettingsTabState extends State<_SettingsTab> {
+  @override
+  void initState() {
+    super.initState();
+    final cubit = context.read<AdminCubit>();
+    if (cubit.state.settingsStatus == ViewStatus.initial) cubit.loadSettings();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cubit = context.read<AdminCubit>();
+    return BlocConsumer<AdminCubit, AdminState>(
+      listenWhen: (a, b) => a.error != b.error && b.error != null,
+      listener: (context, state) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(state.error!)));
+      },
+      buildWhen: (a, b) =>
+          a.settingsStatus != b.settingsStatus || a.settings != b.settings || a.savingFlag != b.savingFlag,
+      builder: (context, state) {
+        if (state.settingsStatus.isLoading || state.settingsStatus == ViewStatus.initial) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (state.settingsStatus.isFailure || state.settings == null) {
+          return _ErrorState(
+            message: state.error ?? 'Could not load settings',
+            onRetry: cubit.loadSettings,
+          );
+        }
+        final s = state.settings!;
+        final flagKeys = s.flags.keys.toList();
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.gutter, AppSpacing.md, AppSpacing.gutter, AppSpacing.xxl),
+          children: [
+            _SectionTitle('Feature flags'),
+            Text('Toggles affect the live mobile app immediately.',
+                style: AppTypography.ui(11.5, color: AppColors.ink3, weight: FontWeight.w600)),
+            const SizedBox(height: AppSpacing.sm),
+            BentoCard(
+              child: Column(
+                children: [
+                  for (var i = 0; i < flagKeys.length; i++)
+                    _FlagRow(
+                      flagKey: flagKeys[i],
+                      value: s.flags[flagKeys[i]] ?? false,
+                      saving: state.savingFlag == flagKeys[i],
+                      divider: i != flagKeys.length - 1,
+                      onChanged: () => cubit.toggleFlag(flagKeys[i]),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            _SectionTitle('Admin team'),
+            const SizedBox(height: AppSpacing.sm),
+            BentoCard(
+              child: Column(
+                children: [
+                  for (final a in s.adminTeam)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 16,
+                            backgroundColor: AppColors.primarySoft,
+                            child: Text(a.email.isNotEmpty ? a.email[0].toUpperCase() : '?',
+                                style: AppTypography.ui(12, color: AppColors.primaryDeep, weight: FontWeight.w800)),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Text(a.email,
+                                style: AppTypography.ui(13, weight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ),
+                          _Pill(text: a.role, color: a.role == 'owner' ? AppColors.primary : AppColors.energy),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _FlagRow extends StatelessWidget {
+  const _FlagRow({
+    required this.flagKey,
+    required this.value,
+    required this.saving,
+    required this.divider,
+    required this.onChanged,
+  });
+  final String flagKey;
+  final bool value;
+  final bool saving;
+  final bool divider;
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final meta = AdminSettings.labels[flagKey];
+    final label = meta?.$1 ?? flagKey;
+    final desc = meta?.$2 ?? '';
+    return Container(
+      decoration: BoxDecoration(
+        border: divider ? const Border(bottom: BorderSide(color: AppColors.line)) : null,
+      ),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: AppTypography.ui(13.5, weight: FontWeight.w700)),
+                if (desc.isNotEmpty)
+                  Text(desc, style: AppTypography.ui(11.5, color: AppColors.ink3, weight: FontWeight.w500)),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          if (saving)
+            const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+          else
+            Switch(
+              value: value,
+              activeThumbColor: AppColors.primary,
+              onChanged: (_) => onChanged(),
+            ),
+        ],
+      ),
     );
   }
 }

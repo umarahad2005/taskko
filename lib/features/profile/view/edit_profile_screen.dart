@@ -65,6 +65,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Google-only accounts have no password to confirm with, so the email /
+    // password change flows (which re-authenticate with a password) don't apply.
+    final hasPassword = context.read<AuthRepository>().currentProviders().contains('password');
     return Scaffold(
       body: DecoratedBox(
         decoration: const BoxDecoration(gradient: AppColors.bgGradient),
@@ -117,15 +120,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               Text('Account & security',
                   style: AppTypography.ui(13, color: AppColors.ink2, weight: FontWeight.w800)),
               const SizedBox(height: AppSpacing.sm),
-              _ActionTile(icon: Icons.alternate_email_rounded, label: 'Change email', onTap: _changeEmail),
-              const SizedBox(height: AppSpacing.sm),
-              _ActionTile(icon: Icons.lock_outline_rounded, label: 'Change password', onTap: _changePassword),
-              const SizedBox(height: AppSpacing.sm),
+              if (hasPassword) ...[
+                _ActionTile(icon: Icons.alternate_email_rounded, label: 'Change email', onTap: _changeEmail),
+                const SizedBox(height: AppSpacing.sm),
+                _ActionTile(icon: Icons.lock_outline_rounded, label: 'Change password', onTap: _changePassword),
+                const SizedBox(height: AppSpacing.sm),
+              ] else ...[
+                const _InfoTile(
+                  icon: Icons.verified_user_rounded,
+                  text: 'You signed in with Google — your email and password are '
+                      'managed in your Google Account.',
+                ),
+                const SizedBox(height: AppSpacing.sm),
+              ],
               _ActionTile(
                 icon: Icons.delete_outline_rounded,
                 label: 'Delete account',
                 color: AppColors.rose,
-                onTap: _deleteAccount,
+                onTap: () => _deleteAccount(hasPassword),
               ),
             ],
           ),
@@ -178,17 +190,32 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (ok && mounted) _snack('Password updated');
   }
 
-  Future<void> _deleteAccount() async {
-    final pass = TextEditingController();
-    final ok = await _showCredDialog(
-      title: 'Delete account?',
-      message: 'This permanently deletes your account. This cannot be undone.',
-      submitLabel: 'Delete forever',
-      destructive: true,
-      fields: [_Field('Confirm password', pass, obscure: true)],
-      action: () => context.read<AuthRepository>().deleteAccount(currentPassword: pass.text),
-    );
-    pass.dispose();
+  Future<void> _deleteAccount(bool hasPassword) async {
+    final bool ok;
+    if (hasPassword) {
+      final pass = TextEditingController();
+      ok = await _showCredDialog(
+        title: 'Delete account?',
+        message: 'This permanently deletes your account. This cannot be undone.',
+        submitLabel: 'Delete forever',
+        destructive: true,
+        fields: [_Field('Confirm password', pass, obscure: true)],
+        action: () => context.read<AuthRepository>().deleteAccount(currentPassword: pass.text),
+      );
+      pass.dispose();
+    } else {
+      // Google account — re-authentication happens via the Google picker inside
+      // deleteAccount(), so no password field is needed here.
+      ok = await _showCredDialog(
+        title: 'Delete account?',
+        message: 'This permanently deletes your account. This cannot be undone. '
+            "You'll be asked to confirm with Google.",
+        submitLabel: 'Delete forever',
+        destructive: true,
+        fields: const [],
+        action: () => context.read<AuthRepository>().deleteAccount(),
+      );
+    }
     if (ok && mounted) {
       _snack('Your account has been deleted.');
       context.go('/login');
@@ -261,6 +288,9 @@ class _CredDialogState extends State<_CredDialog> {
     try {
       await widget.action();
       if (mounted) Navigator.of(context).pop(true);
+    } on AuthCancelledException {
+      // User dismissed the Google re-auth sheet — close without an error.
+      if (mounted) Navigator.of(context).pop(false);
     } on AuthException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -312,6 +342,36 @@ class _CredDialogState extends State<_CredDialog> {
               : Text(widget.submitLabel),
         ),
       ],
+    );
+  }
+}
+
+/// A read-only informational row (e.g. explaining Google-managed credentials).
+class _InfoTile extends StatelessWidget {
+  const _InfoTile({required this.icon, required this.text});
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.primarySoft.withValues(alpha: 0.4),
+        borderRadius: AppRadii.cardRadius,
+        border: Border.all(color: AppColors.line2),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: AppColors.primaryDeep),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Text(text,
+                style: AppTypography.ui(12.5, color: AppColors.ink2, weight: FontWeight.w600)),
+          ),
+        ],
+      ),
     );
   }
 }

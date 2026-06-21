@@ -91,6 +91,8 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     if (!mounted) return;
     if (state.status == AuthStatus.authenticated) {
       context.go(state.isAdmin ? '/admin' : '/home');
+    } else if (state.status == AuthStatus.unverified) {
+      context.go('/verify-email');
     } else {
       context.go('/onboarding');
     }

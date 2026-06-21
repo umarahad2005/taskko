@@ -52,6 +52,23 @@ class AdminApiClient {
     return _decode(res);
   }
 
+  Future<Map<String, dynamic>> patchJson(String path, Map<String, dynamic> body) async {
+    final token = await _token();
+    late final http.Response res;
+    try {
+      res = await _client
+          .patch(
+            Uri.parse('${BackendConfig.baseUrl}$path'),
+            headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 30));
+    } catch (_) {
+      throw AiApiException('Network error — check your connection.', retryable: true);
+    }
+    return _decode(res);
+  }
+
   Map<String, dynamic> _decode(http.Response res) {
     final decoded = res.body.isEmpty ? <String, dynamic>{} : jsonDecode(res.body);
     final json = decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};

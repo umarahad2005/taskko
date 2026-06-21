@@ -151,6 +151,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
   void _onAuth(BuildContext context, AuthState state) {
     if (state.status == AuthStatus.authenticated) {
       context.go(state.isAdmin ? '/admin' : '/home');
+    } else if (state.status == AuthStatus.unverified) {
+      context.go('/verify-email');
     } else if (state.status == AuthStatus.failure && state.error != null) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()

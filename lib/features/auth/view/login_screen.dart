@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../common/validators.dart';
 import '../../../cubits/auth/auth_cubit.dart';
+import '../../../repositories/auth_repository.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_radii.dart';
 import '../../../theme/app_typography.dart';
@@ -37,18 +38,21 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _login() => context.read<AuthCubit>().signInWithEmail(_email.text, _password.text);
 
-  void _tryAdmin() {
-    _email.text = 'admin@taskko.app';
-    _password.text = 'demo-admin';
-    setState(() {});
-    context.read<AuthCubit>().signInWithEmail(_email.text, _password.text);
-  }
-
-  void _forgot() {
-    context.read<AuthCubit>().sendPasswordReset(_email.text);
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('If that email exists, a reset link is on its way.')));
+  /// Open a small dialog to confirm the email, then send a reset link with
+  /// real success/error feedback (the old inline version sent silently and
+  /// always claimed success — it didn't validate or surface failures).
+  Future<void> _forgot() async {
+    final controller = TextEditingController(text: _email.text.trim());
+    final sent = await showDialog<bool>(
+      context: context,
+      builder: (_) => _ForgotPasswordDialog(controller: controller),
+    );
+    controller.dispose();
+    if (sent == true && mounted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('Reset link sent — check your inbox (and spam).')));
+    }
   }
 
   @override
@@ -103,8 +107,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: AppSpacing.xl),
                   PrimaryButton(label: 'Log in', loading: loading, onPressed: _valid ? _login : null),
-                  const SizedBox(height: AppSpacing.md),
-                  _AdminDemoButton(onTap: loading ? null : _tryAdmin),
                   const SizedBox(height: AppSpacing.lg),
                   Center(
                     child: GestureDetector(
@@ -130,6 +132,8 @@ class _LoginScreenState extends State<LoginScreen> {
   void _onAuth(BuildContext context, AuthState state) {
     if (state.status == AuthStatus.authenticated) {
       context.go(state.isAdmin ? '/admin' : '/home');
+    } else if (state.status == AuthStatus.unverified) {
+      context.go('/verify-email');
     } else if (state.status == AuthStatus.failure && state.error != null) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
@@ -138,34 +142,92 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-class _AdminDemoButton extends StatelessWidget {
-  const _AdminDemoButton({required this.onTap});
-  final VoidCallback? onTap;
+/// Collects/confirms an email and sends a password-reset link, showing inline
+/// validation, a loading state, and a friendly error before closing on success.
+class _ForgotPasswordDialog extends StatefulWidget {
+  const _ForgotPasswordDialog({required this.controller});
+  final TextEditingController controller;
+
+  @override
+  State<_ForgotPasswordDialog> createState() => _ForgotPasswordDialogState();
+}
+
+class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
+  bool _busy = false;
+  String? _error;
+
+  Future<void> _send() async {
+    final email = widget.controller.text.trim();
+    final invalid = Validators.email(email);
+    if (invalid != null) {
+      setState(() => _error = invalid);
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await context.read<AuthCubit>().sendPasswordReset(email);
+      if (mounted) Navigator.of(context).pop(true);
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = e.message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = "Couldn't send the link. Please try again.";
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: AppRadii.cardRadius,
-        child: Container(
-          height: 48,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: AppRadii.cardRadius,
-            border: Border.all(color: AppColors.line2),
+    return AlertDialog(
+      title: const Text('Reset your password'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Enter your account email and we'll send you a link to set a new password.",
+            style: AppTypography.ui(13, color: AppColors.ink3, weight: FontWeight.w500),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.shield_outlined, size: 16, color: AppColors.ink3),
-              const SizedBox(width: AppSpacing.sm),
-              Text('Try as admin (demo)', style: AppTypography.ui(13, color: AppColors.ink2, weight: FontWeight.w700)),
-            ],
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: widget.controller,
+            autofocus: true,
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.done,
+            onChanged: (_) {
+              if (_error != null) setState(() => _error = null);
+            },
+            onSubmitted: (_) => _busy ? null : _send(),
+            decoration: const InputDecoration(labelText: 'Email', isDense: true),
           ),
-        ),
+          if (_error != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(_error!, style: AppTypography.ui(12, color: AppColors.rose, weight: FontWeight.w600)),
+          ],
+        ],
       ),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _busy ? null : _send,
+          child: _busy
+              ? const SizedBox(
+                  width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : const Text('Send link'),
+        ),
+      ],
     );
   }
 }

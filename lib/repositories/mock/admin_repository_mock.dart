@@ -1,5 +1,8 @@
 import '../../models/admin_metrics.dart';
+import '../../models/admin_settings.dart';
 import '../../models/admin_user.dart';
+import '../../models/ai_insights.dart';
+import '../../models/moderation_item.dart';
 import '../admin_repository.dart';
 
 /// In-memory admin console (offline demos / widget tests). Mirrors the shape of
@@ -11,6 +14,21 @@ class AdminRepositoryMock implements AdminRepository {
     const AdminUser(id: 'u3', name: 'Sara Malik', email: 'sara@taskko.app', plan: 'free', rank: 'Elite', points: 1680, status: 'active'),
     const AdminUser(id: 'u4', name: 'Demo Student', email: 'demo@taskko.app', plan: 'free', rank: 'Rookie', points: 80, status: 'suspended'),
   ];
+
+  final List<ModerationItem> _moderation = [
+    const ModerationItem(id: 'm1', targetUser: 'bilal@taskko.app', reason: 'Reported chat message: profanity', severity: 'high', status: 'open', createdAt: '2026-06-21T09:12:00Z'),
+    const ModerationItem(id: 'm2', targetUser: 'demo@taskko.app', reason: 'Spam goal titles', severity: 'medium', status: 'open', createdAt: '2026-06-20T14:05:00Z'),
+    const ModerationItem(id: 'm3', targetUser: 'sara@taskko.app', reason: 'Possible self-harm phrase in journal', severity: 'high', status: 'open', createdAt: '2026-06-20T08:40:00Z'),
+    const ModerationItem(id: 'm4', targetUser: 'aisha@taskko.app', reason: 'Off-topic Tako prompt', severity: 'low', status: 'dismissed', createdAt: '2026-06-19T17:22:00Z'),
+  ];
+
+  final Map<String, bool> _flags = {
+    'aiBreakdownEnabled': true,
+    'socialSharingEnabled': true,
+    'moodCheckInEnabled': true,
+    'squadLeaderboardEnabled': true,
+    'maintenanceMode': false,
+  };
 
   @override
   Future<AdminMetrics> metrics() async {
@@ -56,5 +74,73 @@ class AdminRepositoryMock implements AdminRepository {
     );
     _users[i] = updated;
     return updated;
+  }
+
+  @override
+  Future<List<ModerationItem>> moderationQueue({String severity = 'all'}) async {
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    var out = _moderation.toList();
+    if (severity != 'all') out = out.where((m) => m.severity == severity).toList();
+    return out;
+  }
+
+  @override
+  Future<ModerationItem> moderationAction({required String itemId, required String action}) async {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    final i = _moderation.indexWhere((m) => m.id == itemId);
+    if (i == -1) throw StateError('No such moderation item');
+    const statusFor = {'dismiss': 'dismissed', 'warn': 'warned', 'suspend': 'suspended'};
+    final updated = _moderation[i].copyWith(status: statusFor[action] ?? _moderation[i].status);
+    _moderation[i] = updated;
+    return updated;
+  }
+
+  @override
+  Future<AiInsights> aiInsights() async {
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    return const AiInsights(
+      callsToday: 14,
+      calls7d: 96,
+      avgLatencyMs: 1280,
+      fallbackRate: 0.04,
+      costToday: 0,
+      costMonth: 0,
+      quality: [
+        AiQuality(feature: 'plan-day', good: 0.95, fallback: 0.05),
+        AiQuality(feature: 'chat', good: 0.92, fallback: 0.08),
+        AiQuality(feature: 'quiz', good: 0.98, fallback: 0.02),
+        AiQuality(feature: 'breakdown', good: 0.90, fallback: 0.10),
+      ],
+      stuckPhrases: ["I don't get recursion", 'how to start my essay', 'too much to study'],
+      recentPrompts: [
+        AiPrompt(feature: 'plan-day', goal: 'Prepare MAD quiz', at: '2m ago'),
+        AiPrompt(feature: 'chat', message: 'Explain Big-O simply', at: '6m ago'),
+        AiPrompt(feature: 'breakdown', goal: 'Finish OS assignment', at: '11m ago'),
+        AiPrompt(feature: 'quiz', goal: 'Stats midterm', at: '18m ago'),
+      ],
+    );
+  }
+
+  @override
+  Future<AdminSettings> settings() async {
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    return AdminSettings(
+      flags: Map<String, bool>.from(_flags),
+      adminTeam: const [
+        AdminMember(email: 'admin@taskko.app', role: 'owner'),
+      ],
+    );
+  }
+
+  @override
+  Future<AdminSettings> updateFlags(Map<String, bool> flags) async {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    _flags.addAll(flags);
+    return AdminSettings(
+      flags: Map<String, bool>.from(_flags),
+      adminTeam: const [
+        AdminMember(email: 'admin@taskko.app', role: 'owner'),
+      ],
+    );
   }
 }
