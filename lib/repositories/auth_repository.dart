@@ -16,6 +16,16 @@ abstract interface class AuthRepository {
   /// Send a verification email to the signed-in user (no-op if already verified).
   Future<void> sendEmailVerification();
 
+  /// Reload the signed-in user from the server (refreshes `emailVerified`) and
+  /// return the updated profile, or `null` when signed out. Used by the verify-
+  /// email screen to detect once the user has clicked the link.
+  Future<AppUser?> reloadUser();
+
+  /// The sign-in providers linked to the current account (e.g. `'password'`,
+  /// `'google.com'`). Empty when signed out. Lets the UI offer only the actions
+  /// that apply — a Google-only account has no password to change, for example.
+  Set<String> currentProviders();
+
   /// Change the account email (re-authenticates with [currentPassword] first).
   /// Sends a verification link to [newEmail]; the change applies once confirmed.
   Future<void> updateEmail({required String newEmail, required String currentPassword});
@@ -23,8 +33,10 @@ abstract interface class AuthRepository {
   /// Change the account password (re-authenticates with [currentPassword] first).
   Future<void> updatePassword({required String newPassword, required String currentPassword});
 
-  /// Permanently delete the signed-in account (re-authenticates first).
-  Future<void> deleteAccount({required String currentPassword});
+  /// Permanently delete the signed-in account (re-authenticates first). Pass
+  /// [currentPassword] for password accounts; Google-only accounts re-auth
+  /// interactively, so it may be omitted.
+  Future<void> deleteAccount({String? currentPassword});
 }
 
 /// Thrown when the user dismisses a provider sheet (e.g. closes the Google

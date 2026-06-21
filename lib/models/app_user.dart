@@ -46,6 +46,7 @@ class AppUser extends Equatable {
     int? streakDays,
     int? shields,
     Mood? mood,
+    bool? emailVerified,
   }) {
     return AppUser(
       id: id,
@@ -56,7 +57,7 @@ class AppUser extends Equatable {
       shields: shields ?? this.shields,
       mood: mood ?? this.mood,
       isAdmin: isAdmin,
-      emailVerified: emailVerified,
+      emailVerified: emailVerified ?? this.emailVerified,
     );
   }
 

@@ -36,9 +36,16 @@ class AuthRepositoryMock implements AuthRepository {
   @override
   Future<AppUser> signUp({required String name, required String email, required String password}) async {
     await Future<void>.delayed(_latency);
+    // Email/password signups start unverified (mirrors Firebase) so the verify-
+    // email gate is exercised offline too; the admin demo account stays verified.
     final user = email.trim().toLowerCase() == Seed.admin.email
         ? Seed.admin
-        : AppUser(id: 'u-${email.hashCode}', name: name.trim().isEmpty ? 'Student' : name.trim(), email: email.trim());
+        : AppUser(
+            id: 'u-${email.hashCode}',
+            name: name.trim().isEmpty ? 'Student' : name.trim(),
+            email: email.trim(),
+            emailVerified: false,
+          );
     _emit(user);
     return user;
   }
@@ -61,6 +68,21 @@ class AuthRepositoryMock implements AuthRepository {
   }
 
   @override
+  Future<AppUser?> reloadUser() async {
+    await Future<void>.delayed(_latency);
+    // Simulate the user having clicked the verification link so offline demos
+    // can move past the verify-email screen.
+    final user = _current;
+    if (user == null) return null;
+    final verified = user.copyWith(emailVerified: true);
+    _emit(verified);
+    return verified;
+  }
+
+  @override
+  Set<String> currentProviders() => const {'password'};
+
+  @override
   Future<void> signOut() async {
     await Future<void>.delayed(const Duration(milliseconds: 200));
     _emit(null);
@@ -77,7 +99,7 @@ class AuthRepositoryMock implements AuthRepository {
   }
 
   @override
-  Future<void> deleteAccount({required String currentPassword}) async {
+  Future<void> deleteAccount({String? currentPassword}) async {
     await Future<void>.delayed(_latency);
     _emit(null);
   }

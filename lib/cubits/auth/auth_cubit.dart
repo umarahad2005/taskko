@@ -16,9 +16,7 @@ class AuthCubit extends Cubit<AuthState> {
     // the user stays logged in across restarts (like Instagram/Facebook).
     _sub = _repo.authStateChanges().listen(
       (user) {
-        emit(user == null
-            ? const AuthState(status: AuthStatus.unauthenticated)
-            : state.copyWith(status: AuthStatus.authenticated, user: user));
+        emit(user == null ? const AuthState(status: AuthStatus.unauthenticated) : _resolve(user));
       },
       onError: (Object _) {
         // Build a fresh state (not copyWith) so the stale user is dropped:
@@ -44,16 +42,38 @@ class AuthCubit extends Cubit<AuthState> {
 
   Future<void> sendPasswordReset(String email) => _repo.sendPasswordReset(email);
 
+  /// (Re)send the verification email to the signed-in (unverified) user.
+  Future<void> resendVerification() => _repo.sendEmailVerification();
+
+  /// Reload the user from the server and re-resolve auth state. Returns `true`
+  /// once the email is verified (so the caller can prompt "still not verified").
+  Future<bool> refreshVerification() async {
+    final user = await _repo.reloadUser();
+    if (user == null) {
+      emit(const AuthState(status: AuthStatus.unauthenticated));
+      return false;
+    }
+    emit(_resolve(user));
+    return user.emailVerified;
+  }
+
   Future<void> signOut() async {
     await _repo.signOut();
     emit(const AuthState(status: AuthStatus.unauthenticated));
   }
 
+  /// Map a signed-in user to the right app state. Email/password accounts must
+  /// verify their email first (FR-3.*); Google sign-ins are auto-verified, so
+  /// their [AppUser.emailVerified] is always true and they pass straight through.
+  AuthState _resolve(AppUser user) => user.emailVerified
+      ? AuthState(status: AuthStatus.authenticated, user: user)
+      : AuthState(status: AuthStatus.unverified, user: user);
+
   Future<void> _run(Future<AppUser> Function() action) async {
     emit(state.copyWith(status: AuthStatus.authenticating));
     try {
       final user = await action();
-      emit(state.copyWith(status: AuthStatus.authenticated, user: user));
+      emit(_resolve(user));
     } on AuthCancelledException {
       // User dismissed the provider sheet — silently return to the form.
       emit(state.copyWith(status: AuthStatus.unauthenticated));

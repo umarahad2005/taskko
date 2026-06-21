@@ -99,15 +99,38 @@ class FirebaseAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<void> sendPasswordReset(String email) => _auth.sendPasswordResetEmail(email: email.trim());
+  Future<void> sendPasswordReset(String email) async {
+    try {
+      await _auth.sendPasswordResetEmail(email: email.trim());
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(_friendly(e));
+    }
+  }
 
   @override
   Future<void> sendEmailVerification() async {
     final user = _auth.currentUser;
-    if (user != null && !user.emailVerified) {
+    if (user == null) throw const AuthException('You are not signed in.');
+    if (user.emailVerified) return;
+    try {
       await user.sendEmailVerification();
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(_friendly(e));
     }
   }
+
+  @override
+  Future<AppUser?> reloadUser() async {
+    final user = _auth.currentUser;
+    if (user == null) return null;
+    await user.reload();
+    final refreshed = _auth.currentUser;
+    return refreshed == null ? null : _toAppUser(refreshed);
+  }
+
+  @override
+  Set<String> currentProviders() =>
+      _auth.currentUser?.providerData.map((p) => p.providerId).toSet() ?? const {};
 
   @override
   Future<void> signOut() async {
@@ -137,6 +160,35 @@ class FirebaseAuthRepository implements AuthRepository {
     return user;
   }
 
+  /// Re-authenticate a Google account via the native account picker — required
+  /// before deleting a Google-only account (which has no password to confirm).
+  Future<User> _reauthGoogle() async {
+    final user = _auth.currentUser;
+    if (user == null) throw const AuthException('You are not signed in.');
+    final google = GoogleSignIn.instance;
+    if (!_googleReady) {
+      await google.initialize(serverClientId: _webClientId);
+      _googleReady = true;
+    }
+    final GoogleSignInAccount account;
+    try {
+      account = await google.authenticate(scopeHint: const ['email']);
+    } on GoogleSignInException catch (e) {
+      if (e.code == GoogleSignInExceptionCode.canceled) throw const AuthCancelledException();
+      throw AuthException('Google re-authentication failed (${e.code.name}).');
+    }
+    final idToken = account.authentication.idToken;
+    if (idToken == null) {
+      throw const AuthException('Google did not return an ID token. Please try again.');
+    }
+    try {
+      await user.reauthenticateWithCredential(GoogleAuthProvider.credential(idToken: idToken));
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(_friendly(e));
+    }
+    return user;
+  }
+
   @override
   Future<void> updateEmail({required String newEmail, required String currentPassword}) async {
     final user = await _reauth(currentPassword);
@@ -160,13 +212,27 @@ class FirebaseAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<void> deleteAccount({required String currentPassword}) async {
-    final user = await _reauth(currentPassword);
+  Future<void> deleteAccount({String? currentPassword}) async {
+    // Re-authenticate with whatever credential the account actually has: a
+    // password if one was supplied, otherwise the native Google picker.
+    final User user;
+    if (currentPassword != null && currentPassword.isNotEmpty) {
+      user = await _reauth(currentPassword);
+    } else if (currentProviders().contains('google.com')) {
+      user = await _reauthGoogle();
+    } else {
+      // No credential available — surface a clear password error.
+      user = await _reauth(currentPassword ?? '');
+    }
     try {
       await user.delete();
     } on FirebaseAuthException catch (e) {
       throw AuthException(_friendly(e));
     }
+    // Drop the Google session too so the picker reappears on the next sign-in.
+    try {
+      await GoogleSignIn.instance.signOut();
+    } catch (_) {}
   }
 
   /// Map common Firebase auth error codes to clear, user-facing messages.
@@ -181,6 +247,10 @@ class FirebaseAuthRepository implements AuthRepository {
         return 'That email is already in use by another account.';
       case 'invalid-email':
         return 'That email address looks invalid.';
+      case 'user-not-found':
+        return 'No account found with that email.';
+      case 'too-many-requests':
+        return 'Too many attempts. Please wait a moment and try again.';
       case 'requires-recent-login':
         return 'Please sign out and back in, then try again.';
       default:

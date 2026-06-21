@@ -1,6 +1,6 @@
 part of 'auth_cubit.dart';
 
-enum AuthStatus { unknown, authenticating, authenticated, unauthenticated, failure }
+enum AuthStatus { unknown, authenticating, authenticated, unverified, unauthenticated, failure }
 
 class AuthState extends Equatable {
   const AuthState({
@@ -14,6 +14,10 @@ class AuthState extends Equatable {
   final String? error;
 
   bool get isAdmin => user?.isAdmin ?? false;
+
+  /// True while the signed-in user must verify their email before continuing
+  /// (email/password signups only — Google sign-ins are auto-verified).
+  bool get needsVerification => status == AuthStatus.unverified;
 
   AuthState copyWith({AuthStatus? status, AppUser? user, String? error}) => AuthState(
         status: status ?? this.status,
