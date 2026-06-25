@@ -102,7 +102,7 @@ class _HomeBody extends StatelessWidget {
               TaskTile(task: task, onToggle: () => cubit.toggleTask(task.id)),
               const SizedBox(height: AppSpacing.sm),
             ],
-          ],
+             ],
         );
       },
     );
@@ -250,6 +250,7 @@ class _ErrorRetry extends StatelessWidget {
           TextButton(onPressed: onRetry, child: const Text('Retry')),
         ],
       ),
+
     );
   }
 }

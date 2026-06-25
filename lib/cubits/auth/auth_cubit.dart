@@ -62,12 +62,23 @@ class AuthCubit extends Cubit<AuthState> {
     emit(const AuthState(status: AuthStatus.unauthenticated));
   }
 
+  /// The privileged admin-console account. It bypasses the email-verification
+  /// gate and goes straight to the admin panel (app + web), per requirements.
+  static const String adminEmail = 'admin@taskko.app';
+
   /// Map a signed-in user to the right app state. Email/password accounts must
-  /// verify their email first (FR-3.*); Google sign-ins are auto-verified, so
-  /// their [AppUser.emailVerified] is always true and they pass straight through.
-  AuthState _resolve(AppUser user) => user.emailVerified
-      ? AuthState(status: AuthStatus.authenticated, user: user)
-      : AuthState(status: AuthStatus.unverified, user: user);
+  /// verify their email first (FR-3.*) — only a real, working inbox can confirm
+  /// the link, so unverified accounts are held at [AuthStatus.unverified] and
+  /// can't reach the app. Two cases skip the gate: Google sign-ins (always
+  /// `emailVerified`) and admin accounts (the server-verified `admin` claim, or
+  /// the known [adminEmail]).
+  AuthState _resolve(AppUser user) {
+    final isAdminAccount =
+        user.isAdmin || user.email.trim().toLowerCase() == adminEmail;
+    return (user.emailVerified || isAdminAccount)
+        ? AuthState(status: AuthStatus.authenticated, user: user)
+        : AuthState(status: AuthStatus.unverified, user: user);
+  }
 
   Future<void> _run(Future<AppUser> Function() action) async {
     emit(state.copyWith(status: AuthStatus.authenticating));

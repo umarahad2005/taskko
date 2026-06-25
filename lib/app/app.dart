@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 
 import '../cubits/auth/auth_cubit.dart';
 import '../cubits/gamification/gamification_cubit.dart';
@@ -40,7 +41,7 @@ import 'router.dart';
 
 /// Root widget. Wires the (mock for now) repositories and app-level cubits via
 /// dependency injection so M9 can swap mock → real impls without UI changes.
-class TaskkoApp extends StatelessWidget {
+class TaskkoApp extends StatefulWidget {
   const TaskkoApp({super.key});
 
   /// Use real Firebase Auth by default; build/test with `--dart-define=USE_FIREBASE=false`
@@ -52,6 +53,18 @@ class TaskkoApp extends StatelessWidget {
   /// (also set BACKEND_URL). Requires a signed-in Firebase user + the backend's
   /// FIREBASE_SERVICE_ACCOUNT so it can verify the token.
   static const bool useBackend = bool.fromEnvironment('USE_BACKEND', defaultValue: true);
+
+  @override
+  State<TaskkoApp> createState() => _TaskkoAppState();
+}
+
+class _TaskkoAppState extends State<TaskkoApp> {
+  // Built once, from the AuthCubit, so the router's redirect guard can read live
+  // auth state and re-run on every auth change (refreshListenable).
+  GoRouter? _router;
+
+  bool get useFirebase => TaskkoApp.useFirebase;
+  bool get useBackend => TaskkoApp.useBackend;
 
   @override
   Widget build(BuildContext context) {
@@ -93,11 +106,16 @@ class TaskkoApp extends StatelessWidget {
           BlocProvider<AuthCubit>(create: (ctx) => AuthCubit(ctx.read<AuthRepository>())),
           BlocProvider<GamificationCubit>(create: (ctx) => GamificationCubit(ctx.read<GamificationRepository>())),
         ],
-        child: MaterialApp.router(
-          title: 'Taskko',
-          debugShowCheckedModeBanner: false,
-          theme: AppTheme.light(),
-          routerConfig: appRouter,
+        child: Builder(
+          builder: (context) {
+            final router = _router ??= createAppRouter(context.read<AuthCubit>());
+            return MaterialApp.router(
+              title: 'Taskko',
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.light(),
+              routerConfig: router,
+            );
+          },
         ),
       ),
     );
